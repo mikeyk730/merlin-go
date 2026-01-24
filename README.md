@@ -1,8 +1,18 @@
+# Merlin-Go
+
+Fork of BirdNET-Go to work with Merlin-style models.
+
+Changes from upstream repo:
+- Support a Merlin-style sound ID model that runs on a spectrogram instead of audio samples
+- Support a Merlin-style spectrogram model to generate spectrograms
+  - Note: This required changing the audio sample rate from 48000 to 22050, which breaks BirdNET support
+- Support a Merlin-style range filter model
+- Allow separate labels to be used for the sound ID and range filter models
+- Show text instead of check mark when confidence is 100%
+
+
 # BirdNET-Go
 
-<p align="center">
-  <img src="doc/BirdNET-Go-logo.webp" />
-</p>
 <p align="center">
   <!-- Project Status -->
   <a href="https://github.com/tphakala/birdnet-go/releases">
