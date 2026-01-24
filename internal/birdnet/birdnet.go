@@ -40,16 +40,17 @@ type speciesCacheEntry struct {
 
 // BirdNET struct represents the BirdNET model with interpreters and configuration.
 type BirdNET struct {
-	AnalysisInterpreter *tflite.Interpreter
-	RangeInterpreter    *tflite.Interpreter
-	Settings            *conf.Settings
-	ModelInfo           ModelInfo           // Information about the current model
-	TaxonomyMap         TaxonomyMap         // Mapping of species codes to names and vice versa
-	ScientificIndex     ScientificNameIndex // Index for fast scientific name lookups
-	TaxonomyPath        string              // Path to custom taxonomy file, if used
-	mu                  sync.Mutex
-	resultsBuffer       []datastore.Results // Pre-allocated buffer for results to reduce allocations
-	confidenceBuffer    []float32           // Pre-allocated buffer for confidence values to reduce allocations
+	AnalysisInterpreter    *tflite.Interpreter
+	RangeInterpreter       *tflite.Interpreter
+	SpectrogramInterpreter *tflite.Interpreter
+	Settings               *conf.Settings
+	ModelInfo              ModelInfo           // Information about the current model
+	TaxonomyMap            TaxonomyMap         // Mapping of species codes to names and vice versa
+	ScientificIndex        ScientificNameIndex // Index for fast scientific name lookups
+	TaxonomyPath           string              // Path to custom taxonomy file, if used
+	mu                     sync.Mutex
+	resultsBuffer          []datastore.Results // Pre-allocated buffer for results to reduce allocations
+	confidenceBuffer       []float32           // Pre-allocated buffer for confidence values to reduce allocations
 
 	// Species occurrence cache to avoid repeated GetProbableSpecies calls within same day
 	speciesCacheMu sync.RWMutex
@@ -110,6 +111,16 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 			Category(errors.CategoryModelInit).
 			ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
 			Build()
+	}
+
+	if RequiresSpectrogramGeneration(&bn.ModelInfo) {
+		if err := bn.initializeSpectrogramModel(); err != nil {
+			return nil, errors.New(fmt.Errorf("BirdNET: failed to initialize spectrogram model: %w", err)).
+				Component("birdnet").
+				Category(errors.CategoryModelInit).
+				ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
+				Build()
+		}
 	}
 
 	if err := bn.loadLabels(); err != nil {
@@ -377,6 +388,95 @@ func (bn *BirdNET) initializeMetaModel() error {
 	return nil
 }
 
+// getSpectrogramModelData returns the appropriate spectrogram model data based on the settings.
+func (bn *BirdNET) getSpectrogramModelData() ([]byte, error) {
+	// Check if external model path is specified
+	if bn.Settings.BirdNET.Spectrogram.ModelPath != "" {
+		modelPath := bn.Settings.BirdNET.Spectrogram.ModelPath
+
+		// Expand environment variables first
+		modelPath = os.ExpandEnv(modelPath)
+
+		// Then expand ~ to home directory if needed
+		if strings.HasPrefix(modelPath, "~/") {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, errors.New(err).
+					Category(errors.CategoryFileIO).
+					Context("path", modelPath).
+					Build()
+			}
+			modelPath = filepath.Join(homeDir, modelPath[2:])
+		}
+
+		// Load model from external file
+		data, err := os.ReadFile(modelPath) //nolint:gosec // G304: modelPath is from application settings
+		if err != nil {
+			return nil, errors.New(err).
+				Category(errors.CategoryFileIO).
+				Context("path", modelPath).
+				Build()
+		}
+
+		GetLogger().Info("Loaded spectrogram model", logger.String("path", modelPath))
+		return data, nil
+	}
+
+	return nil, errors.Newf("spectrogram model not available: embedded model is nil").
+		Category(errors.CategoryModelLoad).
+		Build()
+}
+
+// initializeSpectrogramModel loads and initializes the spectrogram model.
+func (bn *BirdNET) initializeSpectrogramModel() error {
+	start := time.Now()
+
+	spectrogramModelData, err := bn.getSpectrogramModelData()
+	if err != nil {
+		return err
+	}
+
+	model := tflite.NewModel(spectrogramModelData)
+	if model == nil {
+		return errors.New(fmt.Errorf("cannot load spectrogram model from embedded data")).
+			Category(errors.CategoryModelLoad).
+			Context("model_type", "spectrogram").
+			Timing("spectrogram-model-load", time.Since(start)).
+			Build()
+	}
+
+	// Spectrogram model requires only one CPU.
+	options := tflite.NewInterpreterOptions()
+	options.SetNumThread(1)
+	options.SetErrorReporter(func(msg string, user_data any) {
+		GetLogger().Error("TFLite spectrogram model error", logger.String("message", msg))
+	}, nil)
+
+	// Create and allocate the TensorFlow Lite interpreter for the spectrogram model.
+	bn.SpectrogramInterpreter = tflite.NewInterpreter(model, options)
+	if bn.SpectrogramInterpreter == nil {
+		return errors.New(fmt.Errorf("cannot create spectrogram model interpreter")).
+			Category(errors.CategoryModelInit).
+			Context("model_type", "spectrogram").
+			Timing("spectrogram-model-init", time.Since(start)).
+			Build()
+	}
+	if status := bn.SpectrogramInterpreter.AllocateTensors(); status != tflite.OK {
+		return errors.Newf("tensor allocation failed for spectrogram model: %v", status).
+			Category(errors.CategoryModelInit).
+			Context("model_type", "spectrogram").
+			Context("status_code", status).
+			Timing("spectrogram-model-allocate", time.Since(start)).
+			Build()
+	}
+
+	// Force garbage collection to reclaim memory from spectrogram model loading
+	// The model data is no longer needed as TFLite has created its own internal copy
+	runtime.GC()
+
+	return nil
+}
+
 // determineThreadCount calculates the appropriate number of threads to use based on settings and system capabilities.
 func (bn *BirdNET) determineThreadCount(configuredThreads int) int {
 	systemCpuCount := runtime.NumCPU()
@@ -408,6 +508,13 @@ func (bn *BirdNET) loadLabels() error {
 	// Use embedded labels if no external label path is set
 	if bn.Settings.BirdNET.LabelPath == "" {
 		return bn.loadEmbeddedLabels()
+	}
+
+	if bn.Settings.BirdNET.RangeFilter.LabelPath != "" {
+		err := bn.loadExternalRangeFilterLabels()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Otherwise use external labels
@@ -529,6 +636,40 @@ func (bn *BirdNET) loadExternalLabels() error {
 	return nil
 }
 
+func (bn *BirdNET) loadExternalRangeFilterLabels() error {
+	start := time.Now()
+
+	file, err := os.Open(bn.Settings.BirdNET.RangeFilter.LabelPath)
+	if err != nil {
+		return errors.New(err).
+			Category(errors.CategoryFileIO).
+			Context("range_filter_label_path", bn.Settings.BirdNET.RangeFilter.LabelPath).
+			Context("operation", "open").
+			Timing("range-filter-label-file-open", time.Since(start)).
+			Build()
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			GetLogger().Warn("Failed to close label file",
+				logger.Error(err),
+				logger.String("path", bn.Settings.BirdNET.RangeFilter.LabelPath))
+		}
+	}()
+
+	// Read the file directly as a text file
+	err = bn.loadRangeFilterLabelsFromText(file)
+	if err != nil {
+		return errors.New(err).
+			Category(errors.CategoryLabelLoad).
+			Context("range_filter_label_path", bn.Settings.BirdNET.RangeFilter.LabelPath).
+			Context("operation", "parse").
+			Timing("range-filter-label-file-load", time.Since(start)).
+			Build()
+	}
+
+	return nil
+}
+
 // logMissingTaxonomyCodes checks labels against the taxonomy map and logs information about missing species
 func (bn *BirdNET) logMissingTaxonomyCodes() {
 	// Validate labels against taxonomy
@@ -562,6 +703,14 @@ func (bn *BirdNET) loadLabelsFromText(file *os.File) error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		bn.Settings.BirdNET.Labels = append(bn.Settings.BirdNET.Labels, strings.TrimSpace(scanner.Text()))
+	}
+	return scanner.Err()
+}
+
+func (bn *BirdNET) loadRangeFilterLabelsFromText(file *os.File) error {
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		bn.Settings.BirdNET.RangeFilter.Labels = append(bn.Settings.BirdNET.RangeFilter.Labels, strings.TrimSpace(scanner.Text()))
 	}
 	return scanner.Err()
 }

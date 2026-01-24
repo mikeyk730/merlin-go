@@ -32,6 +32,14 @@ var supportedModels = map[string]ModelInfo{
 		DefaultLocale: conf.DefaultFallbackLocale,
 		NumSpecies:    6523,
 	},
+	"sound_id": {
+		ID:               "sound_id",
+		Name:             "sound_id",
+		Description:      "Merlin-style sound ID operating on a spectrogram",
+		SupportedLocales: []string{"en-us"},
+		DefaultLocale:    "en-us",
+		NumSpecies:       2067,
+	},
 }
 
 // DetermineModelInfo identifies the model type from a file path or model identifier
@@ -102,4 +110,16 @@ func IsLocaleSupported(modelInfo *ModelInfo, locale string) bool {
 	}
 
 	return false
+}
+
+func IsMerlinStyle(modelInfo *ModelInfo) bool {
+	return strings.HasPrefix(modelInfo.Name, "sound_id")
+}
+
+func ShouldApplySigmoid(modelInfo *ModelInfo) bool {
+	return !IsMerlinStyle(modelInfo)
+}
+
+func RequiresSpectrogramGeneration(modelInfo *ModelInfo) bool {
+	return IsMerlinStyle(modelInfo)
 }

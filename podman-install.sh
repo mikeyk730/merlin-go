@@ -1898,7 +1898,7 @@ webserver:
 audio:
   source: "default"
   channels: 1
-  samplerate: 48000
+  samplerate: 22050
   bitdepth: 16
   
 # Analysis settings
