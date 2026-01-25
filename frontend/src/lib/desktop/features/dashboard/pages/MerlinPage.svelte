@@ -64,40 +64,35 @@ Performance Optimizations:
   const SPECIES_LIMIT_BUFFER_TRIGGER = 10;
   const SPECIES_LIMIT_BUFFER_TARGET = 5;
 
+  type MdkTodo = {
+    commonName: string;
+    confidence: number;
+  };
+
   // SSE Detection Data Type
   type SSEDetectionData = {
-    ID: number;
-    CommonName: string;
-    ScientificName: string;
-    Confidence: number;
-    Date: string; // YYYY-MM-DD
-    Time: string; // HH:MM:SS
-    SpeciesCode: string;
-    Verified?: Detection['verified'];
-    Locked?: boolean;
-    Source?: string;
-    BeginTime?: string;
-    EndTime?: string;
-    eventType?: string;
+    predictions: MdkTodo[];
+    datetime: string; // YYYY-MM-DD
   };
 
   function isSSEDetectionData(v: unknown): v is SSEDetectionData {
     if (!isPlainObject(v)) return false;
-    const o = v as Record<string, unknown>;
-    const dateOk = typeof o.Date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.Date);
-    const timeOk = typeof o.Time === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(o.Time);
-    return (
-      typeof o.ID === 'number' &&
-      typeof o.CommonName === 'string' &&
-      o.CommonName.length > 0 &&
-      typeof o.ScientificName === 'string' &&
-      o.ScientificName.length > 0 &&
-      typeof o.Confidence === 'number' &&
-      dateOk &&
-      timeOk &&
-      typeof o.SpeciesCode === 'string' &&
-      o.SpeciesCode.length > 0
-    );
+    return true;
+    //const o = v as Record<string, unknown>;
+    //const dateOk = typeof o.Date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.Date);
+    //const timeOk = typeof o.Time === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(o.Time);
+    //return (
+    //  typeof o.ID === 'number' &&
+    //  typeof o.CommonName === 'string' &&
+    //  o.CommonName.length > 0 &&
+    //  typeof o.ScientificName === 'string' &&
+    //  o.ScientificName.length > 0 &&
+    //  typeof o.Confidence === 'number' &&
+    //  dateOk &&
+    //  timeOk &&
+    //  typeof o.SpeciesCode === 'string' &&
+    //  o.SpeciesCode.length > 0
+    //);
   }
 
   // State management
@@ -243,7 +238,7 @@ Performance Optimizations:
 
   // Connect to SSE stream for real-time updates using ReconnectingEventSource
   function connectToDetectionStream() {
-    logger.debug('Connecting to SSE stream at /api/v2/detections/stream');
+    logger.debug('Connecting to SSE stream at /api/v2/merlin/stream');
 
     // Clean up existing connection
     if (eventSource) {
@@ -253,7 +248,7 @@ Performance Optimizations:
 
     try {
       // ReconnectingEventSource with configuration
-      eventSource = new ReconnectingEventSource('/api/v2/detections/stream', {
+      eventSource = new ReconnectingEventSource('/api/v2/merlin/stream', {
         max_retry_time: 30000, // Max 30 seconds between reconnection attempts
         withCredentials: false,
       });
@@ -306,7 +301,7 @@ Performance Optimizations:
         }
       });
 
-      eventSource.addEventListener('detection', (event: Event) => {
+      eventSource.addEventListener('merlin', (event: Event) => {
         try {
           // eslint-disable-next-line no-undef
           const messageEvent = event as MessageEvent;
@@ -353,18 +348,18 @@ Performance Optimizations:
     try {
       // Convert SSEDetectionData to Detection format
       const detection: Detection = {
-        id: detectionData.ID,
-        commonName: detectionData.CommonName,
-        scientificName: detectionData.ScientificName,
-        confidence: detectionData.Confidence,
-        date: detectionData.Date,
-        time: detectionData.Time,
-        speciesCode: detectionData.SpeciesCode,
-        verified: detectionData.Verified ?? 'unverified',
-        locked: detectionData.Locked ?? false,
-        source: detectionData.Source ?? '',
-        beginTime: detectionData.BeginTime ?? '',
-        endTime: detectionData.EndTime ?? '',
+        id: 1,
+        commonName: detectionData.predictions[0].commonName,
+        scientificName: 'fpp',
+        confidence: detectionData.predictions[0].confidence,
+        date: detectionData.datetime,
+        time: detectionData.datetime,
+        speciesCode: 'fpp',
+        verified: 'unverified',
+        locked: false,
+        source: '',
+        beginTime: '',
+        endTime: '',
       };
 
       handleNewDetection(detection);
