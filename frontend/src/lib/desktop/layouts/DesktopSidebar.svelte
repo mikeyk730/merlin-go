@@ -297,7 +297,7 @@ Performance Optimizations:
         >
           <LogoBadge size="md" variant="ocean" />
           {#if !isCollapsed}
-            <span class="text-xl font-bold tracking-tight text-base-content">BirdNET-Go</span>
+            <span class="text-xl font-bold tracking-tight text-base-content">Merlin-Go</span>
           {/if}
         </button>
         <!-- Collapse toggle - desktop only -->

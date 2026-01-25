@@ -167,7 +167,8 @@
           break;
         case 'merlin':
           if (!Merlin) {
-            const module = await import('./lib/desktop/views/Merlin.svelte');
+            const module =
+              await import('./lib/desktop/features/dashboard/pages/MerlinPage.svelte');
             Merlin = module.default;
           }
           break;
