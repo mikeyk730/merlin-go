@@ -40,20 +40,13 @@ Performance Optimizations:
   import { onMount, untrack } from 'svelte';
   import ReconnectingEventSource from 'reconnecting-eventsource';
   import MerlinCard from '$lib/desktop/features/dashboard/components/MerlinCard.svelte';
-  import DetectionCardGrid from '$lib/desktop/features/dashboard/components/DetectionCardGrid.svelte';
   import { t } from '$lib/i18n';
   import type { DailySpeciesSummary, Detection } from '$lib/types/detection.types';
   import {
-    getLocalDateString,
-    isFutureDate,
     parseHour,
-    parseLocalDateString,
   } from '$lib/utils/date';
   import {
     getInitialDate,
-    persistDate,
-    getDateFromURL,
-    resetDateToToday,
   } from '$lib/utils/datePersistence';
   import { getLogger } from '$lib/utils/logger';
   import { safeArrayAccess, isPlainObject } from '$lib/utils/security';
@@ -119,47 +112,6 @@ Performance Optimizations:
 
   // SSE throttling timer
   let sseFetchTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Valid detection limit options for card grid layout
-  const VALID_DETECTION_LIMITS = [6, 12, 24, 48];
-  const DEFAULT_DETECTION_LIMIT = 6;
-
-  // Migration map from old values to new card grid values
-  const LIMIT_MIGRATION_MAP: Record<number, number> = {
-    5: 6,
-    10: 12,
-    25: 24,
-    50: 48,
-  };
-
-  // Function to get initial detection limit from localStorage
-  function getInitialDetectionLimit(): number {
-    if (typeof window !== 'undefined') {
-      const savedLimit = localStorage.getItem('recentDetectionLimit');
-      if (savedLimit) {
-        const parsed = parseInt(savedLimit, 10);
-        if (!isNaN(parsed)) {
-          // Check if it's a valid new value
-          if (VALID_DETECTION_LIMITS.includes(parsed)) {
-            return parsed;
-          }
-          // Migrate old values to new ones
-          const migrated = Object.hasOwn(LIMIT_MIGRATION_MAP, parsed)
-            ? LIMIT_MIGRATION_MAP[parsed as keyof typeof LIMIT_MIGRATION_MAP]
-            : undefined;
-          if (migrated !== undefined) {
-            // Update localStorage with migrated value
-            localStorage.setItem('recentDetectionLimit', migrated.toString());
-            return migrated;
-          }
-        }
-      }
-    }
-    return DEFAULT_DETECTION_LIMIT;
-  }
-
-  // Detection limit state to sync with DetectionCardGrid
-  let detectionLimit = $state(getInitialDetectionLimit());
 
   // Animation state for new detections
   let newDetectionIds = $state(new Set<number>());

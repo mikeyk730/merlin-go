@@ -740,56 +740,6 @@ Responsive Breakpoints:
   });
 </script>
 
-{#snippet navigationControls()}
-  <div class="flex items-center gap-2 w-full justify-between md:w-auto md:justify-end">
-    <!-- Previous day button -->
-    <button
-      onclick={onPreviousDay}
-      class="btn btn-sm btn-ghost shrink-0"
-      aria-label={t('dashboard.dailySummary.navigation.previousDay')}
-    >
-      <ChevronLeft class="size-5" />
-    </button>
-
-    <!-- Date picker with consistent width -->
-    <DatePicker
-      value={selectedDate}
-      onChange={onDateChange}
-      onTodayClick={onGoToToday}
-      className="mx-auto md:mx-2 w-auto"
-    />
-
-    <!-- Next day button -->
-    <button
-      onclick={onNextDay}
-      class="btn btn-sm btn-ghost shrink-0"
-      disabled={isToday}
-      aria-label={t('dashboard.dailySummary.navigation.nextDay')}
-    >
-      <ChevronRight class="size-5" />
-    </button>
-  </div>
-{/snippet}
-
-{#snippet sunIcon(sunType: 'sunrise' | 'sunset', sunTime: string | undefined, shouldShow: boolean)}
-  {#if shouldShow && sunTime}
-    {@const parsedDate = parseLocalDateString(sunTime)}
-    {#if parsedDate}
-      {@const formattedTime = getLocalTimeString(parsedDate, false)}
-      <div
-        class="sun-icon-wrapper"
-        title={t(`dashboard.dailySummary.daylight.${sunType}`, { time: formattedTime })}
-      >
-        {#if sunType === 'sunrise'}
-          <Sunrise class="size-3.5 text-orange-700" />
-        {:else}
-          <Sunset class="size-3.5 text-rose-700" />
-        {/if}
-        <span class="sun-tooltip sun-tooltip-{sunType}">{formattedTime}</span>
-      </div>
-    {/if}
-  {/if}
-{/snippet}
 
 <!-- Live region for screen reader announcements of loading state changes -->
 <div class="sr-only" role="status" aria-live="polite" aria-atomic="true">
@@ -825,7 +775,6 @@ Responsive Breakpoints:
           <h3 class="font-semibold">{t('dashboard.dailySummary.title')}</h3>
           <p class="text-sm text-base-content/60">{t('dashboard.dailySummary.subtitle')}</p>
         </div>
-        {@render navigationControls()}
       </div>
     </div>
     <div class="p-6">
@@ -848,7 +797,6 @@ Responsive Breakpoints:
           <h3 class="font-semibold">{t('dashboard.dailySummary.title')}</h3>
           <p class="text-sm text-base-content/60">{t('dashboard.dailySummary.subtitle')}</p>
         </div>
-        {@render navigationControls()}
       </div>
     </div>
 
@@ -922,8 +870,6 @@ Responsive Breakpoints:
                 <div
                   class="h-5 rounded-sm daylight-cell daylight-{daylightClass} relative flex items-center justify-center"
                 >
-                  {@render sunIcon('sunrise', sunTimes?.sunrise, hour === sunriseHour)}
-                  {@render sunIcon('sunset', sunTimes?.sunset, hour === sunsetHour)}
                 </div>
               {/each}
             </div>
@@ -942,8 +888,6 @@ Responsive Breakpoints:
                 <div
                   class="h-5 rounded-sm daylight-cell daylight-{daylightClass} relative flex items-center justify-center"
                 >
-                  {@render sunIcon('sunrise', sunTimes?.sunrise, showSunrise)}
-                  {@render sunIcon('sunset', sunTimes?.sunset, showSunset)}
                 </div>
               {/each}
             </div>
@@ -962,8 +906,6 @@ Responsive Breakpoints:
                 <div
                   class="h-5 rounded-sm daylight-cell daylight-{daylightClass} relative flex items-center justify-center"
                 >
-                  {@render sunIcon('sunrise', sunTimes?.sunrise, showSunrise)}
-                  {@render sunIcon('sunset', sunTimes?.sunset, showSunset)}
                 </div>
               {/each}
             </div>
