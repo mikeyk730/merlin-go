@@ -39,7 +39,7 @@ Performance Optimizations:
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import ReconnectingEventSource from 'reconnecting-eventsource';
-  import DailySummaryCard from '$lib/desktop/features/dashboard/components/DailySummaryCard.svelte';
+  import MerlinCard from '$lib/desktop/features/dashboard/components/MerlinCard.svelte';
   import DetectionCardGrid from '$lib/desktop/features/dashboard/components/DetectionCardGrid.svelte';
   import { t } from '$lib/i18n';
   import type { DailySpeciesSummary, Detection } from '$lib/types/detection.types';
@@ -110,7 +110,7 @@ Performance Optimizations:
   // State management
   let dailySummary = $state<DailySpeciesSummary[]>([]);
   let selectedDate = $state(getInitialDate());
-  let isLoadingSummary = $state(true);
+  let isLoadingSummary = $state(false);
   let isLoadingDetections = $state(true);
   let summaryError = $state<string | null>(null);
   let detectionsError = $state<string | null>(null);
@@ -172,115 +172,6 @@ Performance Optimizations:
   // Debouncing for rapid daily summary updates
   let updateQueue = $state(new Map<string, Detection>());
   let updateTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Daily summary response caching for performance optimization
-  interface CachedDailySummary {
-    data: DailySpeciesSummary[];
-    timestamp: number;
-  }
-
-  // Use $state.raw() for non-mutated cache objects to avoid proxy overhead
-  const dailySummaryCache = $state.raw(new Map<string, CachedDailySummary>());
-  const CACHE_TTL = 60000; // 1 minute TTL for daily summary cache
-  const CACHE_MAX_ENTRIES = 30; // ~1 month of data to prevent memory issues
-
-  // Selective cache update functions for incremental SSE updates
-  function updateDailySummaryCacheEntry(date: string, updatedSummary: DailySpeciesSummary[]) {
-    const cached = dailySummaryCache.get(date);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      // Update cache with new data, preserve timestamp to maintain TTL
-      cached.data = updatedSummary;
-      logger.debug(`Daily summary cache updated incrementally for ${date}`);
-    }
-  }
-
-  // Fetch functions
-  async function fetchDailySummary() {
-    isLoadingSummary = true;
-    summaryError = null;
-
-    try {
-      // Check cache first - if valid entry exists within TTL, return it
-      const cached = dailySummaryCache.get(selectedDate);
-      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        // Cache hit - use cached data directly
-        dailySummary = cached.data;
-        isLoadingSummary = false;
-        logger.debug(`Daily summary cache hit for ${selectedDate}`);
-        return;
-      }
-
-      // Cache miss or expired - fetch from API
-      logger.debug(`Daily summary cache miss for ${selectedDate}, fetching from API`);
-      const response = await fetch(
-        `/api/v2/analytics/species/daily?date=${selectedDate}&limit=${summaryLimit}`
-      );
-      if (!response.ok) {
-        throw new Error(t('dashboard.errors.dailySummaryFetch', { status: response.statusText }));
-      }
-      const data = await response.json();
-
-      // Update UI
-      dailySummary = data;
-
-      // Cache the result for future requests
-      dailySummaryCache.set(selectedDate, {
-        data: data,
-        timestamp: Date.now(),
-      });
-
-      // Cleanup old cache entries to prevent memory leaks
-      cleanupDailySummaryCache();
-
-      // Enforce maximum cache size limit
-      if (dailySummaryCache.size > CACHE_MAX_ENTRIES) {
-        enforceMaxCacheSize();
-      }
-    } catch (error) {
-      summaryError =
-        error instanceof Error ? error.message : t('dashboard.errors.dailySummaryLoad');
-      logger.error('Error fetching daily summary:', error);
-    } finally {
-      isLoadingSummary = false;
-    }
-  }
-
-  // Cleanup expired cache entries to prevent unbounded memory growth
-  function cleanupDailySummaryCache() {
-    const now = Date.now();
-    for (const [date, cached] of dailySummaryCache.entries()) {
-      if (now - cached.timestamp >= CACHE_TTL) {
-        dailySummaryCache.delete(date);
-      }
-    }
-  }
-
-  // Enforce maximum cache size by evicting oldest entries
-  function enforceMaxCacheSize() {
-    if (dailySummaryCache.size <= CACHE_MAX_ENTRIES) return;
-
-    // Convert to array for sorting by timestamp
-    const entries = Array.from(dailySummaryCache.entries());
-    entries.sort((a, b) => {
-      const timestampA = a[1]?.timestamp ?? 0;
-      const timestampB = b[1]?.timestamp ?? 0;
-      return timestampA - timestampB;
-    });
-
-    // Remove oldest entries until within limit
-    const entriesToRemove = dailySummaryCache.size - CACHE_MAX_ENTRIES;
-    for (let i = 0; i < entriesToRemove; i++) {
-      const entry = safeArrayAccess(entries, i);
-      if (entry) {
-        const key = entry[0]; // Map entry key is always a string
-        dailySummaryCache.delete(key);
-      }
-    }
-
-    logger.debug(`Cache size enforced: removed ${entriesToRemove} oldest entries`);
-  }
-
-
 
   async function fetchDashboardConfig() {
     try {
@@ -531,44 +422,12 @@ Performance Optimizations:
   }
 
   onMount(() => {
-    // Persist the initial date to URL only if out of sync
-    if (getDateFromURL() !== selectedDate) {
-      persistDate(selectedDate);
-    }
-
-    fetchDailySummary();
     fetchDashboardConfig();
 
     // Setup SSE connection for real-time updates
     connectToDetectionStream();
 
-    // Initial preload of adjacent dates (reactive effect will handle subsequent preloads)
-    triggerAdjacentPreload(selectedDate);
-
-    // Handle browser navigation (back/forward)
-    const handlePopState = () => {
-      const urlDate = getDateFromURL();
-      if (urlDate && urlDate !== selectedDate) {
-        selectedDate = urlDate;
-        handleDateChangeWithCleanup();
-        fetchDailySummary();
-      } else if (!urlDate) {
-        // If no date in URL, use current date
-        const currentDate = getLocalDateString();
-        if (currentDate !== selectedDate) {
-          selectedDate = currentDate;
-          handleDateChangeWithCleanup();
-          fetchDailySummary();
-        }
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-
     return () => {
-      // Clean up browser navigation listener
-      window.removeEventListener('popstate', handlePopState);
-
       // Clean up SSE connection
       if (eventSource) {
         eventSource.close();
@@ -586,12 +445,6 @@ Performance Optimizations:
         sseFetchTimer = null;
       }
 
-      // Clean up preload debounce timer
-      if (preloadDebounceTimer) {
-        clearTimeout(preloadDebounceTimer);
-        preloadDebounceTimer = null;
-      }
-
       // Clean up animation timers
       animationCleanupTimers.forEach(timer => clearTimeout(timer));
       animationCleanupTimers.clear();
@@ -604,100 +457,15 @@ Performance Optimizations:
 
       // Clear pending cleanups
       pendingCleanups.clear();
-
-      // Clean up daily summary cache
-      dailySummaryCache.clear();
-
-      // Cancel any pending preload requests
-      preloadCache.clear();
     };
   });
 
-  // Date navigation
-  // Enhanced date change handler with cleanup
-  function handleDateChangeWithCleanup() {
-    // Clear pending updates for old date
-    if (updateTimer) {
-      clearTimeout(updateTimer);
-      updateTimer = null;
-    }
-    updateQueue.clear();
 
-    // Clear animations
-    clearDailySummaryAnimations();
+  function noop() {
   }
-
-  function previousDay() {
-    const date = parseLocalDateString(selectedDate);
-    if (!date) return;
-    date.setDate(date.getDate() - 1);
-    const newDateString = getLocalDateString(date);
-    selectedDate = newDateString;
-    persistDate(newDateString);
-    handleDateChangeWithCleanup();
-    fetchDailySummary();
-  }
-
-  function nextDay() {
-    const date = parseLocalDateString(selectedDate);
-    if (!date) return;
-    date.setDate(date.getDate() + 1);
-    const newDateString = getLocalDateString(date);
-    if (!isFutureDate(newDateString)) {
-      selectedDate = newDateString;
-      persistDate(newDateString);
-      handleDateChangeWithCleanup();
-      fetchDailySummary();
-    }
-  }
-
-  /**
-   * Handle date change from DatePicker component
-   * Persists the new date to both URL and localStorage for sticky behavior
-   */
-  function handleDateChange(date: string) {
-    selectedDate = date;
-    persistDate(date);
-    handleDateChangeWithCleanup();
-    fetchDailySummary();
-  }
-
-  /**
-   * Navigate to today's date and reset date persistence
-   * Called when user clicks "Today" button in DatePicker
-   * Clears both URL parameter and localStorage to show current date
-   */
-  function goToToday() {
-    // Reset date persistence and navigate to today
-    resetDateToToday();
-    const currentDate = getLocalDateString();
-    selectedDate = currentDate;
-    handleDateChangeWithCleanup();
-    fetchDailySummary();
-  }
-
-  // Derived state to check if we're viewing today's data
-  const isViewingToday = $derived(selectedDate === getLocalDateString());
 
   // Queue daily summary updates with debouncing for rapid updates
   function queueDailySummaryUpdate(detection: Detection) {
-    // Only allow SSE updates to daily summary when viewing today's data
-    if (!isViewingToday) {
-      logger.debug('Skipping daily summary SSE update - viewing historical data:', selectedDate);
-      return;
-    }
-
-    // Additional safety check: ensure detection is for today
-    if (detection.date !== selectedDate) {
-      logger.debug(
-        'Skipping daily summary update - detection date mismatch:',
-        detection.date,
-        'vs',
-        selectedDate
-      );
-      return;
-    }
-
     // Performance: Skip if too many pending updates to prevent UI freeze
     if (updateQueue.size > 20) {
       logger.warn('Too many pending daily summary updates, skipping to prevent performance issues');
@@ -729,25 +497,6 @@ Performance Optimizations:
 
   // Incremental daily summary update when new detection arrives via SSE
   function updateDailySummary(detection: Detection) {
-    // Only allow SSE updates to daily summary when viewing today's data
-    if (!isViewingToday) {
-      logger.debug('Skipping daily summary update - viewing historical data:', selectedDate);
-      return;
-    }
-
-    // Additional safety check: ensure detection is for today and matches selected date
-    if (detection.date !== selectedDate && detection.date !== getLocalDateString()) {
-      logger.debug(
-        'Skipping daily summary update - detection date mismatch:',
-        detection.date,
-        'vs',
-        selectedDate,
-        'today:',
-        getLocalDateString()
-      );
-      return;
-    }
-
     // Parse the time string (HH:MM:SS format) to extract the hour
     let hour: number;
     try {
@@ -761,7 +510,7 @@ Performance Optimizations:
     const existingIndex = dailySummary.findIndex(s => s.species_code === detection.speciesCode);
 
     if (existingIndex >= 0) {
-      // Update existing species - DailySummaryCard's sortedData handles reordering
+      // Update existing species - MerlinCard's sortedData handles reordering
       const existing = safeArrayAccess(dailySummary, existingIndex);
       if (!existing) return;
       const updated = { ...existing };
@@ -777,7 +526,7 @@ Performance Optimizations:
       updated.hourlyUpdated = [hour];
       updated.latest_heard = detection.time;
 
-      // Update in place - sorting is handled by DailySummaryCard's sortedData derived value
+      // Update in place - sorting is handled by MerlinCard's sortedData derived value
       dailySummary = [
         ...dailySummary.slice(0, existingIndex),
         updated,
@@ -786,9 +535,6 @@ Performance Optimizations:
       logger.debug(
         `Updated species: ${detection.commonName} (count: ${updated.count}, hour: ${hour})`
       );
-
-      // Update cache incrementally instead of invalidating
-      updateDailySummaryCacheEntry(selectedDate, dailySummary);
 
       // Clear animation flags after animation completes
       scheduleAnimationCleanup(
@@ -808,16 +554,13 @@ Performance Optimizations:
               cleared,
               ...dailySummary.slice(currentIndex + 1),
             ];
-
-            // Update cache after animation cleanup too
-            updateDailySummaryCacheEntry(selectedDate, dailySummary);
           }
         },
         1000,
         `count-${detection.speciesCode}`
       );
     } else {
-      // Add new species - sorting is handled by DailySummaryCard's sortedData derived value
+      // Add new species - sorting is handled by MerlinCard's sortedData derived value
       const newSpecies: DailySpeciesSummary = {
         scientific_name: detection.scientificName,
         common_name: detection.commonName,
@@ -835,13 +578,13 @@ Performance Optimizations:
         newSpecies.hourly_counts.splice(hour, 1, 1);
       }
 
-      // Add to array - DailySummaryCard's sortedData will sort by count
+      // Add to array - MerlinCard's sortedData will sort by count
       dailySummary = [...dailySummary, newSpecies];
 
       // Enforce species count limit to prevent grid from growing indefinitely
-      // Note: This is a safety limit before sorting; DailySummaryCard applies final limit after sorting
+      // Note: This is a safety limit before sorting; MerlinCard applies final limit after sorting
       if (summaryLimit > 0 && dailySummary.length > summaryLimit + SPECIES_LIMIT_BUFFER_TRIGGER) {
-        // Keep a buffer above the limit to allow for proper sorting in DailySummaryCard
+        // Keep a buffer above the limit to allow for proper sorting in MerlinCard
         // Sort by count here to remove truly lowest-count species
         dailySummary = [...dailySummary]
           .sort((a, b) => b.count - a.count)
@@ -849,9 +592,6 @@ Performance Optimizations:
       }
 
       logger.debug(`Added new species: ${detection.commonName} (count: 1, hour: ${hour})`);
-
-      // Update cache incrementally with new species included
-      updateDailySummaryCacheEntry(selectedDate, dailySummary);
 
       // Clear animation flag after animation completes
       scheduleAnimationCleanup(
@@ -870,9 +610,6 @@ Performance Optimizations:
               cleared,
               ...dailySummary.slice(currentIndex + 1),
             ];
-
-            // Update cache after animation cleanup too
-            updateDailySummaryCacheEntry(selectedDate, dailySummary);
           }
         },
         800,
@@ -881,141 +618,6 @@ Performance Optimizations:
     }
   }
 
-  // Preloading cache for batch requests - use $state.raw() for performance
-  const preloadCache = $state.raw(new Set<string>());
-  let preloadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Generate adjacent dates for preloading
-  function getAdjacentDates(baseDate: string): string[] {
-    const dates: string[] = [];
-    const base = parseLocalDateString(baseDate);
-    if (!base) return dates;
-
-    // Previous date
-    const prevDate = new Date(base);
-    prevDate.setDate(prevDate.getDate() - 1);
-    dates.push(getLocalDateString(prevDate));
-
-    // Next date (only if not future)
-    const nextDate = new Date(base);
-    nextDate.setDate(nextDate.getDate() + 1);
-    const nextDateString = getLocalDateString(nextDate);
-    if (!isFutureDate(nextDateString)) {
-      dates.push(nextDateString);
-    }
-
-    return dates;
-  }
-
-  // Batch preload adjacent dates using the new batch API
-  function batchPreloadAdjacentDates(baseDate: string = selectedDate): void {
-    const adjacentDates = getAdjacentDates(baseDate);
-
-    // Filter out dates that are already cached or being preloaded
-    const datesToPreload = adjacentDates.filter(
-      date => !dailySummaryCache.has(date) && !preloadCache.has(date)
-    );
-
-    if (datesToPreload.length === 0) {
-      logger.debug(`No adjacent dates need preloading for ${baseDate}`);
-      return;
-    }
-
-    // Mark dates as being preloaded to prevent duplicate requests
-    datesToPreload.forEach(date => preloadCache.add(date));
-
-    // Start batch preloading using untrack to prevent reactive dependencies
-    // Fire-and-forget operation for performance optimization
-    void untrack(() => {
-      const datesParam = datesToPreload.join(',');
-      return fetch(
-        `/api/v2/analytics/species/daily/batch?dates=${datesParam}&limit=${summaryLimit}`
-      )
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`Batch preload failed: ${response.statusText}`);
-          }
-          return response.json();
-        })
-        .then((batchData: Record<string, DailySpeciesSummary[]>) => {
-          const timestamp = Date.now();
-          let successCount = 0;
-
-          // Cache all successfully loaded dates
-          for (const [dateString, data] of Object.entries(batchData)) {
-            if (data && Array.isArray(data)) {
-              dailySummaryCache.set(dateString, {
-                data: data,
-                timestamp: timestamp,
-              });
-              successCount++;
-            }
-          }
-
-          logger.debug(
-            `Batch preloaded ${successCount}/${datesToPreload.length} adjacent dates for ${baseDate}`
-          );
-          return batchData;
-        })
-        .catch(error => {
-          logger.debug(`Batch preload failed for ${baseDate}:`, error);
-          // TODO: Add Sentry.io telemetry for batch preload failures to track network issues
-
-          // Fall back to individual requests if batch fails
-          logger.debug('Falling back to individual preload requests');
-          datesToPreload.forEach(dateString => {
-            fetch(`/api/v2/analytics/species/daily?date=${dateString}&limit=${summaryLimit}`)
-              .then(response => (response.ok ? response.json() : null))
-              .then(data => {
-                if (data) {
-                  dailySummaryCache.set(dateString, {
-                    data: data,
-                    timestamp: Date.now(),
-                  });
-                  logger.debug(`Individual fallback preload succeeded for ${dateString}`);
-                }
-              })
-              .catch(fallbackError => {
-                logger.debug(
-                  `Individual fallback preload failed for ${dateString}:`,
-                  fallbackError
-                );
-                // TODO: Add Sentry.io telemetry for individual fallback failures
-              });
-          });
-        })
-        .finally(() => {
-          // Clean up preload tracking
-          datesToPreload.forEach(date => preloadCache.delete(date));
-        });
-    });
-  }
-
-  // Trigger batch preload of adjacent dates with debouncing
-  function triggerAdjacentPreload(baseDate: string = selectedDate) {
-    // Clear existing debounce timer
-    if (preloadDebounceTimer) {
-      clearTimeout(preloadDebounceTimer);
-    }
-
-    // Debounce preloading to avoid excessive requests during rapid date changes
-    preloadDebounceTimer = setTimeout(() => {
-      logger.debug(`Triggering batch adjacent preload for ${baseDate}`);
-
-      // Use batch preloading for better performance
-      batchPreloadAdjacentDates(baseDate);
-
-      preloadDebounceTimer = null;
-    }, 150); // Wait 150ms for settling
-  }
-
-  // Reactive preloading - triggers when selectedDate changes
-  $effect(() => {
-    // Only preload if we have a valid selectedDate and not during initial load
-    if (selectedDate) {
-      triggerAdjacentPreload(selectedDate);
-    }
-  });
 
   // Update freeze state management
   function handleFreezeStart() {
@@ -1056,17 +658,17 @@ Performance Optimizations:
 
 <div class="col-span-12">
   <!-- Daily Summary Section -->
-  <DailySummaryCard
+  <MerlinCard
     data={dailySummary}
     loading={isLoadingSummary}
     error={summaryError}
     {selectedDate}
     {showThumbnails}
     speciesLimit={summaryLimit}
-    onPreviousDay={previousDay}
-    onNextDay={nextDay}
-    onGoToToday={goToToday}
-    onDateChange={handleDateChange}
+    onPreviousDay={noop}
+    onNextDay={noop}
+    onGoToToday={noop}
+    onDateChange={noop}
   />
 
 </div>
