@@ -527,60 +527,6 @@ Responsive Breakpoints:
           class="daily-summary-grid min-w-[900px]"
           style:--species-col-width={speciesColumnWidth}
         >
-          <!-- Hours header row -->
-          <div class="flex mb-1">
-            <div class="species-label-col shrink-0"></div>
-            <!-- Hourly headers (desktop) -->
-            <div class="hourly-grid flex-1 grid text-xs">
-              {#each Array(24) as _, hour (hour)}
-                <a
-                  href={urlBuilders.hourly(hour, 1)}
-                  class="text-center hover:text-primary cursor-pointer"
-                  style:color="color-mix(in srgb, var(--color-base-content) 50%, transparent)"
-                  title={t('dashboard.dailySummary.tooltips.viewHourly', {
-                    hour: hour.toString().padStart(2, '0'),
-                  })}
-                >
-                  {hour.toString().padStart(2, '0')}
-                </a>
-              {/each}
-            </div>
-            <!-- Bi-hourly headers (tablet/mobile) -->
-            <div class="bi-hourly-grid flex-1 grid text-xs">
-              {#each Array(12) as _, i (i)}
-                {@const hour = i * 2}
-                <a
-                  href={urlBuilders.hourly(hour, 2)}
-                  class="text-center hover:text-primary cursor-pointer"
-                  style:color="color-mix(in srgb, var(--color-base-content) 50%, transparent)"
-                  title={t('dashboard.dailySummary.tooltips.viewBiHourly', {
-                    startHour: hour.toString().padStart(2, '0'),
-                    endHour: (hour + 2).toString().padStart(2, '0'),
-                  })}
-                >
-                  {hour.toString().padStart(2, '0')}
-                </a>
-              {/each}
-            </div>
-            <!-- Six-hourly headers (small mobile) -->
-            <div class="six-hourly-grid flex-1 grid text-xs">
-              {#each Array(4) as _, i (i)}
-                {@const hour = i * 6}
-                <a
-                  href={urlBuilders.hourly(hour, 6)}
-                  class="text-center hover:text-primary cursor-pointer"
-                  style:color="color-mix(in srgb, var(--color-base-content) 50%, transparent)"
-                  title={t('dashboard.dailySummary.tooltips.viewSixHourly', {
-                    startHour: hour.toString().padStart(2, '0'),
-                    endHour: (hour + 6).toString().padStart(2, '0'),
-                  })}
-                >
-                  {hour.toString().padStart(2, '0')}
-                </a>
-              {/each}
-            </div>
-          </div>
-
           <!-- Species rows -->
           <div class="flex flex-col" style:gap="var(--grid-gap)">
             {#each sortedData as item (item.scientific_name)}
@@ -643,7 +589,7 @@ Responsive Breakpoints:
 
                 <!-- Hourly heatmap cells (desktop) -->
                 <div class="hourly-grid flex-1 grid">
-                  {#each Array(24) as _, hour (hour)}
+                  {#each Array(1) as _, hour (hour)}
                     {@const count = safeArrayAccess(item.hourly_counts, hour, 0) ?? 0}
                     {@const intensity = getHeatmapIntensity(count)}
                     <div
@@ -666,58 +612,6 @@ Responsive Breakpoints:
                     </div>
                   {/each}
                 </div>
-
-                <!-- Bi-hourly heatmap cells (tablet/mobile) -->
-                <div class="bi-hourly-grid flex-1 grid">
-                  {#each Array(12) as _, i (i)}
-                    {@const hour = i * 2}
-                    {@const count = renderFunctions['bi-hourly'](item, hour)}
-                    {@const intensity = getHeatmapIntensity(count)}
-                    <div
-                      class="heatmap-cell h-8 rounded-sm heatmap-color-{intensity} flex items-center justify-center text-xs font-medium"
-                    >
-                      {#if count > 0}
-                        <a
-                          href={urlBuilders.speciesHour(item, hour, 2)}
-                          class="w-full h-full flex items-center justify-center cursor-pointer hover:opacity-80"
-                          title={t('dashboard.dailySummary.tooltips.biHourlyDetections', {
-                            count,
-                            startHour: hour.toString().padStart(2, '0'),
-                            endHour: (hour + 2).toString().padStart(2, '0'),
-                          })}
-                        >
-                          <AnimatedCounter value={count} />
-                        </a>
-                      {/if}
-                    </div>
-                  {/each}
-                </div>
-
-                <!-- Six-hourly heatmap cells (small mobile) -->
-                <div class="six-hourly-grid flex-1 grid">
-                  {#each Array(4) as _, i (i)}
-                    {@const hour = i * 6}
-                    {@const count = renderFunctions['six-hourly'](item, hour)}
-                    {@const intensity = getHeatmapIntensity(count)}
-                    <div
-                      class="heatmap-cell h-8 rounded-sm heatmap-color-{intensity} flex items-center justify-center text-xs font-medium"
-                    >
-                      {#if count > 0}
-                        <a
-                          href={urlBuilders.speciesHour(item, hour, 6)}
-                          class="w-full h-full flex items-center justify-center cursor-pointer hover:opacity-80"
-                          title={t('dashboard.dailySummary.tooltips.sixHourlyDetections', {
-                            count,
-                            startHour: hour.toString().padStart(2, '0'),
-                            endHour: (hour + 6).toString().padStart(2, '0'),
-                          })}
-                        >
-                          <AnimatedCounter value={count} />
-                        </a>
-                      {/if}
-                    </div>
-                  {/each}
-                </div>
               </div>
             {/each}
           </div>
@@ -728,23 +622,7 @@ Responsive Breakpoints:
             class="text-center py-8"
             style:color="color-mix(in srgb, var(--color-base-content) 60%, transparent)"
           >
-            {t('dashboard.dailySummary.noSpecies')}
-          </div>
-        {/if}
-
-        <!-- Heatmap Legend -->
-        {#if sortedData.length > 0}
-          <div class="flex justify-end items-center gap-1.5 mt-3 text-xs text-base-content/60">
-            <span>{t('dashboard.dailySummary.legend.less')}</span>
-            <div class="flex gap-0.5">
-              {#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as intensity (intensity)}
-                <div
-                  class="w-3 h-3 rounded-sm heatmap-color-{intensity}"
-                  title="Intensity {intensity}"
-                ></div>
-              {/each}
-            </div>
-            <span>{t('dashboard.dailySummary.legend.more')}</span>
+            Listening for birds...
           </div>
         {/if}
       </div>
