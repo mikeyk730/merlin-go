@@ -56,12 +56,6 @@ Responsive Breakpoints:
   import { LRUCache } from '$lib/utils/LRUCache';
   import { safeArrayAccess, safeGet } from '$lib/utils/security';
   import {
-    WEATHER_ICON_MAP,
-    UNKNOWN_WEATHER_INFO,
-    getEffectiveWeatherCode,
-    translateWeatherCondition,
-  } from '$lib/utils/weather';
-  import {
     convertTemperature,
     getTemperatureSymbol,
     type TemperatureUnit,
@@ -119,15 +113,6 @@ Responsive Breakpoints:
   interface SunTimes {
     sunrise: string; // ISO date string
     sunset: string; // ISO date string
-  }
-
-  // Hourly weather data from API
-  interface HourlyWeatherResponse {
-    time: string; // "HH:mm:ss"
-    temperature: number;
-    weather_main?: string;
-    weather_desc?: string; // yr.no symbol like "partlycloudy_night"
-    weather_icon?: string; // icon code or "unknown"
   }
 
   // Column type definitions
@@ -200,49 +185,6 @@ Responsive Breakpoints:
   let loadingPhase = $state<'skeleton' | 'spinner' | 'loaded' | 'error'>('skeleton');
   let showDelayedIndicator = $state(false);
 
-  // Sun times state
-  let sunTimes = $state<SunTimes | null>(null);
-
-  // Hourly weather state
-  let hourlyWeather = $state<HourlyWeatherResponse[]>([]);
-  // Map for O(1) hour lookup (populated when hourlyWeather changes)
-  let hourlyWeatherMap = $state(new Map<number, HourlyWeatherResponse>());
-
-  // Temperature unit preference (fetched from dashboard config)
-  let temperatureUnit = $state<TemperatureUnit>('metric');
-
-  // Cache for sun times to avoid repeated API calls - use LRUCache to limit memory usage
-  const sunTimesCache = $state.raw(
-    new LRUCache<string, SunTimes>(CONFIG.CACHE.SUN_TIMES_MAX_ENTRIES)
-  );
-
-  // Cache for hourly weather to avoid repeated API calls
-  const hourlyWeatherCache = $state.raw(
-    new LRUCache<string, HourlyWeatherResponse[]>(CONFIG.CACHE.SUN_TIMES_MAX_ENTRIES)
-  );
-
-  // Fetch dashboard config for temperature unit preference
-  async function fetchDashboardConfig(): Promise<void> {
-    try {
-      const response = await fetch('/api/v2/settings/dashboard');
-      if (!response.ok) return;
-      const config = await response.json();
-      // Map config temperatureUnit to TemperatureUnit type
-      if (config.temperatureUnit === 'fahrenheit') {
-        temperatureUnit = 'imperial';
-      } else {
-        temperatureUnit = 'metric';
-      }
-    } catch {
-      // Keep default 'metric' on error
-    }
-  }
-
-  // Fetch dashboard config on mount
-  $effect(() => {
-    fetchDashboardConfig();
-  });
-
   // Optimize loading state management with proper dependency tracking
   $effect(() => {
     if (loading) {
@@ -265,206 +207,6 @@ Responsive Breakpoints:
       showDelayedIndicator = false;
     }
   });
-
-  // Fetch sun times from weather API with caching
-  async function fetchSunTimes(date: string): Promise<SunTimes | null> {
-    // Check cache first using LRUCache methods
-    const cached = sunTimesCache.get(date);
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      const response = await fetch(`/api/v2/weather/sun/${date}`);
-      if (!response.ok) {
-        const errorMsg = `Failed to fetch sun times: ${response.status} ${response.statusText}`;
-        logger.warn(errorMsg);
-        return null;
-      }
-      const responseData = await response.json();
-      const sunTimesData: SunTimes = {
-        sunrise: responseData.sunrise,
-        sunset: responseData.sunset,
-      };
-
-      // Cache the result
-      sunTimesCache.set(date, sunTimesData);
-
-      return sunTimesData;
-    } catch (fetchError) {
-      const errorMsg =
-        fetchError instanceof Error ? fetchError.message : 'Unknown error fetching sun times';
-      logger.warn('Error fetching sun times:', errorMsg);
-      return null;
-    }
-  }
-
-  // Update sun times when selected date changes
-  // Uses captured date to prevent stale data from overwriting fresh data on rapid date changes
-  $effect(() => {
-    const currentDate = selectedDate;
-    if (currentDate) {
-      fetchSunTimes(currentDate).then(times => {
-        // Only update if this is still the current date (prevents race condition)
-        if (selectedDate === currentDate) {
-          sunTimes = times;
-        }
-      });
-    }
-  });
-
-  // Fetch hourly weather data from API with caching
-  async function fetchHourlyWeather(date: string): Promise<HourlyWeatherResponse[]> {
-    // Validate date format (YYYY-MM-DD) before making API request
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      logger.warn(`Invalid date format provided to fetchHourlyWeather: ${date}`);
-      return [];
-    }
-
-    // Check cache first
-    const cached = hourlyWeatherCache.get(date);
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      const response = await fetch(`/api/v2/weather/hourly/${date}`);
-      if (!response.ok) {
-        logger.warn(`Failed to fetch hourly weather: ${response.status} ${response.statusText}`);
-        return [];
-      }
-      const responseData = await response.json();
-      const weatherData: HourlyWeatherResponse[] = responseData.data || [];
-
-      // Cache the result
-      hourlyWeatherCache.set(date, weatherData);
-
-      return weatherData;
-    } catch (fetchError) {
-      const errorMsg =
-        fetchError instanceof Error ? fetchError.message : 'Unknown error fetching hourly weather';
-      logger.warn('Error fetching hourly weather:', errorMsg);
-      return [];
-    }
-  }
-
-  // Update hourly weather when selected date changes
-  // Uses captured date to prevent stale data from overwriting fresh data on rapid date changes
-  $effect(() => {
-    const currentDate = selectedDate;
-    if (currentDate) {
-      fetchHourlyWeather(currentDate).then(data => {
-        // Only update if this is still the current date (prevents race condition)
-        if (selectedDate === currentDate) {
-          hourlyWeather = data;
-          // Build hour-keyed map for O(1) lookup
-          hourlyWeatherMap = new Map(data.map(w => [parseInt(w.time.split(':')[0], 10), w]));
-        }
-      });
-    }
-  });
-
-  // Calculate which hour column corresponds to sunrise/sunset
-  const getSunHourFromTime = (timeStr: string): number | null => {
-    if (!timeStr) return null;
-    try {
-      const date = new Date(timeStr);
-      return date.getHours();
-    } catch (parseError) {
-      logger.error('Error parsing time', parseError, { timeStr });
-      return null;
-    }
-  };
-
-  // Pre-computed sunrise/sunset hours to avoid recalculating in template loops
-  const sunriseHour = $derived(sunTimes ? getSunHourFromTime(sunTimes.sunrise) : null);
-  const sunsetHour = $derived(sunTimes ? getSunHourFromTime(sunTimes.sunset) : null);
-
-  // Find weather data for a specific hour (O(1) map lookup)
-  const getHourlyWeatherData = (hour: number): HourlyWeatherResponse | undefined => {
-    return hourlyWeatherMap.get(hour);
-  };
-
-  // Get weather emoji for a specific hour
-  const getHourlyWeatherEmoji = (hour: number): string => {
-    const hourData = getHourlyWeatherData(hour);
-    if (!hourData) return '';
-
-    const iconCode = getEffectiveWeatherCode(hourData.weather_icon, hourData.weather_desc);
-    if (!iconCode) return '';
-
-    // Determine if it's night based on hour relative to sunrise/sunset
-    // Fallback checks both OpenWeatherMap 'n' suffix and yr.no '_night' suffix in description
-    const isNight =
-      sunriseHour !== null && sunsetHour !== null
-        ? hour < sunriseHour || hour >= sunsetHour
-        : (hourData.weather_icon?.endsWith('n') ?? false) ||
-          (hourData.weather_desc?.includes('_night') ?? false);
-
-    const weatherInfo = safeGet(WEATHER_ICON_MAP, iconCode, UNKNOWN_WEATHER_INFO);
-    return isNight ? weatherInfo.night : weatherInfo.day;
-  };
-
-  // Get tooltip text for hourly weather
-  const getHourlyWeatherTooltip = (hour: number): string => {
-    const hourData = getHourlyWeatherData(hour);
-    if (!hourData) return '';
-
-    // Translate raw weather description to human-readable text
-    const rawDesc = hourData.weather_main || hourData.weather_desc || '';
-    const desc = translateWeatherCondition(rawDesc);
-
-    // Convert temperature from Celsius (API storage) to user's preferred unit
-    let temp = '';
-    if (hourData.temperature !== undefined) {
-      const convertedTemp = convertTemperature(hourData.temperature, temperatureUnit);
-      const symbol = getTemperatureSymbol(temperatureUnit);
-      temp = `${convertedTemp.toFixed(1)}${symbol}`;
-    }
-
-    return [desc, temp].filter(Boolean).join(', ');
-  };
-
-  // Get daylight class for an hour based on its position relative to sunrise/sunset
-  // Returns: 'deep-night', 'night', 'pre-dawn', 'sunrise', 'early-day', 'day', 'mid-day', 'late-day', 'sunset', 'dusk', 'evening'
-  const getDaylightClass = (hour: number): string => {
-    const { DAWN_DUSK_HOURS_OFFSET, MIDDAY_INTENSITY_THRESHOLD, DAY_INTENSITY_THRESHOLD } =
-      CONFIG.DAYLIGHT;
-    const { DEEP_NIGHT_END, DEEP_NIGHT_START, NIGHT_MORNING, NIGHT_EVENING } = CONFIG.DAYLIGHT;
-
-    // Use pre-computed derived values for performance
-    if (sunriseHour === null || sunsetHour === null) return 'night';
-
-    // Sunrise hour - special gradient
-    if (hour === sunriseHour) return 'sunrise';
-    // Sunset hour - special gradient
-    if (hour === sunsetHour) return 'sunset';
-
-    // Pre-dawn (hours before sunrise)
-    if (hour >= sunriseHour - DAWN_DUSK_HOURS_OFFSET && hour < sunriseHour) return 'pre-dawn';
-
-    // Dusk (hours after sunset)
-    if (hour > sunsetHour && hour <= sunsetHour + DAWN_DUSK_HOURS_OFFSET) return 'dusk';
-
-    // Daylight hours
-    if (hour > sunriseHour && hour < sunsetHour) {
-      const midday = (sunriseHour + sunsetHour) / 2;
-      const distanceFromMidday = Math.abs(hour - midday);
-      const daylightDuration = (sunsetHour - sunriseHour) / 2;
-
-      // Categorize daylight intensity
-      if (distanceFromMidday < daylightDuration * MIDDAY_INTENSITY_THRESHOLD) return 'mid-day';
-      if (distanceFromMidday < daylightDuration * DAY_INTENSITY_THRESHOLD) return 'day';
-      return hour < midday ? 'early-day' : 'late-day';
-    }
-
-    // Night hours - vary by distance from midnight
-    if (hour >= 0 && hour <= DEEP_NIGHT_END) return 'deep-night';
-    if (hour >= DEEP_NIGHT_START && hour <= 23) return 'deep-night';
-    if (hour === NIGHT_MORNING || hour === NIGHT_EVENING) return 'night';
-    return 'evening';
-  };
 
   // Species badge color palette - 12 distinct, visually appealing colors
   const BADGE_COLORS = $state.raw([
@@ -767,16 +509,6 @@ Responsive Breakpoints:
   <section
     class="daily-summary-card card col-span-12 bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible"
   >
-    <div class="px-6 py-4 border-b border-base-200 overflow-visible">
-      <div
-        class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between overflow-visible"
-      >
-        <div class="flex flex-col">
-          <h3 class="font-semibold">{t('dashboard.dailySummary.title')}</h3>
-          <p class="text-sm text-base-content/60">{t('dashboard.dailySummary.subtitle')}</p>
-        </div>
-      </div>
-    </div>
     <div class="p-6">
       <div class="alert alert-error">
         <XCircle class="size-6" />
@@ -788,18 +520,6 @@ Responsive Breakpoints:
   <section
     class="daily-summary-card card col-span-12 bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible"
   >
-    <!-- Card Header with Date Navigation -->
-    <div class="px-6 py-4 border-b border-base-200 overflow-visible">
-      <div
-        class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between overflow-visible"
-      >
-        <div class="flex flex-col">
-          <h3 class="font-semibold">{t('dashboard.dailySummary.title')}</h3>
-          <p class="text-sm text-base-content/60">{t('dashboard.dailySummary.subtitle')}</p>
-        </div>
-      </div>
-    </div>
-
     <!-- Grid Content -->
     <div class="p-6 pt-8">
       <div class="overflow-x-auto overflow-y-visible">
@@ -807,110 +527,6 @@ Responsive Breakpoints:
           class="daily-summary-grid min-w-[900px]"
           style:--species-col-width={speciesColumnWidth}
         >
-          <!-- Hourly weather visualization row (only shown if weather data exists) -->
-          {#if hourlyWeather.length > 0}
-            <div class="flex mb-1">
-              <!-- Empty label column to align with other rows -->
-              <div class="species-label-col shrink-0"></div>
-
-              <!-- Hourly weather (desktop) -->
-              <div class="hourly-grid flex-1 grid">
-                {#each Array(24) as _, hour (hour)}
-                  {@const emoji = getHourlyWeatherEmoji(hour)}
-                  <div
-                    class="h-5 flex items-center justify-center text-sm weather-cell"
-                    title={getHourlyWeatherTooltip(hour)}
-                  >
-                    {emoji || ''}
-                  </div>
-                {/each}
-              </div>
-
-              <!-- Bi-hourly weather (tablet/mobile) -->
-              <div class="bi-hourly-grid flex-1 grid">
-                {#each Array(12) as _, i (i)}
-                  {@const hour = i * 2}
-                  {@const emoji = getHourlyWeatherEmoji(hour)}
-                  <div
-                    class="h-5 flex items-center justify-center text-sm weather-cell"
-                    title={getHourlyWeatherTooltip(hour)}
-                  >
-                    {emoji || ''}
-                  </div>
-                {/each}
-              </div>
-
-              <!-- Six-hourly weather (small mobile) -->
-              <div class="six-hourly-grid flex-1 grid">
-                {#each Array(4) as _, i (i)}
-                  {@const hour = i * 6}
-                  {@const emoji = getHourlyWeatherEmoji(hour)}
-                  <div
-                    class="h-5 flex items-center justify-center text-base weather-cell"
-                    title={getHourlyWeatherTooltip(hour)}
-                  >
-                    {emoji || ''}
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <!-- Daylight visualization row -->
-          <div class="flex mb-1">
-            <div class="species-label-col shrink-0 flex items-center">
-              <span class="text-xs text-base-content/60 font-normal whitespace-nowrap"
-                >{t('dashboard.dailySummary.daylight.label')}</span
-              >
-            </div>
-            <!-- Hourly daylight (desktop) -->
-            <div class="hourly-grid flex-1 grid">
-              {#each Array(24) as _, hour (hour)}
-                {@const daylightClass = getDaylightClass(hour)}
-                <div
-                  class="h-5 rounded-sm daylight-cell daylight-{daylightClass} relative flex items-center justify-center"
-                >
-                </div>
-              {/each}
-            </div>
-            <!-- Bi-hourly daylight (tablet/mobile) -->
-            <div class="bi-hourly-grid flex-1 grid">
-              {#each Array(12) as _, i (i)}
-                {@const hour = i * 2}
-                {@const daylightClass = getDaylightClass(hour)}
-                {@const showSunrise =
-                  sunriseHour !== null && hour <= sunriseHour && sunriseHour < hour + 2}
-                {@const showSunset =
-                  sunsetHour !== null &&
-                  hour <= sunsetHour &&
-                  sunsetHour < hour + 2 &&
-                  !showSunrise}
-                <div
-                  class="h-5 rounded-sm daylight-cell daylight-{daylightClass} relative flex items-center justify-center"
-                >
-                </div>
-              {/each}
-            </div>
-            <!-- Six-hourly daylight (small mobile) -->
-            <div class="six-hourly-grid flex-1 grid">
-              {#each Array(4) as _, i (i)}
-                {@const hour = i * 6}
-                {@const daylightClass = getDaylightClass(hour)}
-                {@const showSunrise =
-                  sunriseHour !== null && hour <= sunriseHour && sunriseHour < hour + 6}
-                {@const showSunset =
-                  sunsetHour !== null &&
-                  hour <= sunsetHour &&
-                  sunsetHour < hour + 6 &&
-                  !showSunrise}
-                <div
-                  class="h-5 rounded-sm daylight-cell daylight-{daylightClass} relative flex items-center justify-center"
-                >
-                </div>
-              {/each}
-            </div>
-          </div>
-
           <!-- Hours header row -->
           <div class="flex mb-1">
             <div class="species-label-col shrink-0"></div>

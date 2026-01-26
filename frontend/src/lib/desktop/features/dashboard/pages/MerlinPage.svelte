@@ -347,22 +347,24 @@ Performance Optimizations:
     }
     try {
       // Convert SSEDetectionData to Detection format
-      const detection: Detection = {
-        id: 1,
-        commonName: detectionData.predictions[0].commonName,
-        scientificName: 'fpp',
-        confidence: detectionData.predictions[0].confidence,
-        date: detectionData.datetime,
-        time: detectionData.datetime,
-        speciesCode: 'fpp',
-        verified: 'unverified',
-        locked: false,
-        source: '',
-        beginTime: '',
-        endTime: '',
-      };
+      for (let i in detectionData.predictions){
+        const detection: Detection = {
+          id: 1,
+          commonName: detectionData.predictions[i].commonName,
+          scientificName: detectionData.predictions[i].commonName,
+          confidence: detectionData.predictions[i].confidence,
+          date: detectionData.datetime,
+          time: detectionData.datetime,
+          speciesCode: detectionData.predictions[i].commonName,
+          verified: 'unverified',
+          locked: false,
+          source: '',
+          beginTime: '',
+          endTime: '',
+        };
 
-      handleNewDetection(detection);
+        handleNewDetection(detection);
+      }
     } catch (error) {
       logger.error('Error processing detection data:', error);
     }
@@ -446,13 +448,7 @@ Performance Optimizations:
   function updateDailySummary(detection: Detection) {
     // Parse the time string (HH:MM:SS format) to extract the hour
     let hour: number;
-    try {
-      hour = parseHour(detection.time);
-    } catch (error) {
-      logger.error(`Failed to parse detection time: ${detection.time}`, error);
-      // Default to hour 0 if parsing fails
-      hour = 0;
-    }
+    hour = 0;
 
     const existingIndex = dailySummary.findIndex(s => s.species_code === detection.speciesCode);
 
