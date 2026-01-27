@@ -18,7 +18,7 @@ Features:
 - Clickable cells linking to detailed detection views
 
 Props:
-- data: DailySpeciesSummary[] - Array of species detection summaries
+- data: MerlinSpeciesSummary[] - Array of species detection summaries
 - loading?: boolean - Loading state indicator (default: false)
 - error?: string | null - Error message to display (default: null)
 - showThumbnails?: boolean - Show thumbnails or colored badge placeholders (default: true)
@@ -42,7 +42,7 @@ Responsive Breakpoints:
 <script lang="ts">
   import SkeletonDailySummary from '$lib/desktop/components/ui/SkeletonDailySummary.svelte';
   import { t } from '$lib/i18n';
-  import type { DailySpeciesSummary } from '$lib/types/detection.types';
+  import type { MerlinSpeciesSummary } from '$lib/types/detection.types';
   import { loggers } from '$lib/utils/logger';
   import { LRUCache } from '$lib/utils/LRUCache';
   import { safeArrayAccess, safeGet } from '$lib/utils/security';
@@ -123,7 +123,7 @@ Responsive Breakpoints:
   type ColumnDefinition = SpeciesColumn | HourlyColumn;
 
   interface Props {
-    data: DailySpeciesSummary[];
+    data: MerlinSpeciesSummary[];
     loading?: boolean;
     error?: string | null;
     showThumbnails?: boolean;
@@ -239,8 +239,8 @@ Responsive Breakpoints:
 
   // Pre-computed render functions - use $state.raw for performance (static functions)
   const renderFunctions = $state.raw({
-    hourly: (item: DailySpeciesSummary, hour: number) =>
-      safeArrayAccess(item.hourly_counts, hour, 0) ?? 0
+    hourly: (item: MerlinSpeciesSummary, hour: number) =>
+      item.count
   });
 
   // Calculate dynamic species column width based on longest name
@@ -266,6 +266,7 @@ Responsive Breakpoints:
 
     return `${finalWidth}rem`;
   });
+
 </script>
 
 
@@ -315,17 +316,17 @@ Responsive Breakpoints:
         >
           <!-- Species rows -->
           <div class="flex flex-col" style:gap="var(--grid-gap)">
-            {#each data as item (item.scientific_name)}
+            {#each data as item (item.common_name)}
               <div
                 class="flex items-center species-row"
               >
                 <!-- Species info column -->
                 <div class="species-label-col shrink-0 flex items-center gap-2 pr-4">
                     <MerlinThumbnail
-                      thumbnailUrl={item.thumbnail_url ||
-                        `/api/v2/media/species-image?name=${encodeURIComponent(item.scientific_name)}`}
+                      thumbnailUrl={
+                        `/api/v2/media/species-image?name=${encodeURIComponent(item.common_name)}`}
                       commonName={item.common_name}
-                      scientificName={item.scientific_name}
+                      scientificName={item.common_name}
                     />
                   <a
                     class="text-lg hover:text-primary cursor-pointer font-medium leading-tight flex items-center gap-1 overflow-hidden"
@@ -335,28 +336,18 @@ Responsive Breakpoints:
                   </a>
                 </div>
 
-                <!-- Hourly heatmap cells (desktop) -->
                 <div class="hourly-grid flex-1 grid">
-                  {#each Array(1) as _, hour (hour)}
-                    {@const count = safeArrayAccess(item.hourly_counts, hour, 0) ?? 0}
-                    {@const intensity = getHeatmapIntensity(count)}
                     <div
-                      class="heatmap-cell h-8 rounded-sm heatmap-color-{intensity} flex items-center justify-center text-xs font-medium"
-                      class:hour-updated={item.hourlyUpdated?.includes(hour)}
+                      class="heatmap-cell h-8 rounded-sm heatmap-color-{getHeatmapIntensity(item.count)} flex items-center justify-center text-xs font-medium"
                     >
-                      {#if count > 0}
+                      {#if item.count > 0}
                         <a
                           class="w-full h-full flex items-center justify-center cursor-pointer hover:opacity-80"
-                          title={t('dashboard.dailySummary.tooltips.hourlyDetections', {
-                            count,
-                            hour: hour.toString().padStart(2, '0'),
-                          })}
                         >
-                          <AnimatedCounter value={count} />
+                          <AnimatedCounter value={item.count} />
                         </a>
                       {/if}
                     </div>
-                  {/each}
                 </div>
               </div>
             {/each}
@@ -386,6 +377,22 @@ Responsive Breakpoints:
   .row-update {
     animation: highlightRow 1.5s ease-out; /* Duration and timing */
   }
+  
+    @keyframes speciesNameHighlight {
+    0% {
+      background-color: #ffff00;
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  .species-name-updated {
+    animation: speciesNameHighlight 2s ease-out forwards;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+  }
+  
   /* ========================================================================
      CSS Custom Properties for Daily Summary Grid
      Scoped to component to avoid global conflicts

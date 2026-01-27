@@ -40,7 +40,7 @@ Performance Optimizations:
   import ReconnectingEventSource from 'reconnecting-eventsource';
   import MerlinCard from '$lib/desktop/features/dashboard/components/MerlinCard.svelte';
   import { t } from '$lib/i18n';
-  import type { DailySpeciesSummary, Detection } from '$lib/types/detection.types';
+  import type { MerlinSpeciesSummary, Detection } from '$lib/types/detection.types';
   import {
     parseHour,
   } from '$lib/utils/date';
@@ -95,7 +95,7 @@ Performance Optimizations:
   }
 
   // State management
-  let dailySummary = $state<DailySpeciesSummary[]>([]);
+  let dailySummary = $state<MerlinSpeciesSummary[]>([]);
   let isLoadingSummary = $state(false);
   let isLoadingDetections = $state(true);
   let summaryError = $state<string | null>(null);
@@ -157,7 +157,6 @@ Performance Optimizations:
       ...species,
       isNew: false,
       countIncreased: false,
-      hourlyUpdated: [],
     }));
 
     // Clear any pending animation cleanup timers
@@ -444,11 +443,8 @@ Performance Optimizations:
 
   // Incremental daily summary update when new detection arrives via SSE
   function updateDailySummary(detection: Detection) {
-    // Parse the time string (HH:MM:SS format) to extract the hour
-    let hour: number;
-    hour = 0;
 
-    const existingIndex = dailySummary.findIndex(s => s.species_code === detection.speciesCode);
+    const existingIndex = dailySummary.findIndex(s => s.common_name === detection.commonName);
 
     if (existingIndex >= 0) {
       // Update existing species - MerlinCard's sortedData handles reordering
@@ -458,14 +454,6 @@ Performance Optimizations:
       updated.previousCount = updated.count;
       updated.count++;
       updated.countIncreased = true;
-      updated.hourly_counts = [...updated.hourly_counts];
-      const currentHourCount = safeArrayAccess(updated.hourly_counts, hour, 0) ?? 0;
-      // Use splice to safely assign at dynamic index
-      if (hour >= 0 && hour < 24) {
-        updated.hourly_counts.splice(hour, 1, currentHourCount + 1);
-      }
-      updated.hourlyUpdated = [hour];
-      updated.latest_heard = detection.time;
 
       // Update in place - sorting is handled by MerlinCard's sortedData derived value
       dailySummary = [
@@ -474,21 +462,20 @@ Performance Optimizations:
         ...dailySummary.slice(existingIndex + 1),
       ];
       logger.debug(
-        `Updated species: ${detection.commonName} (count: ${updated.count}, hour: ${hour})`
+        `Updated species: ${detection.commonName} (count: ${updated.count})`
       );
 
       // Clear animation flags after animation completes
       scheduleAnimationCleanup(
         () => {
           const currentIndex = dailySummary.findIndex(
-            s => s.species_code === detection.speciesCode
+            s => s.common_name === detection.commonName
           );
           if (currentIndex >= 0) {
             const currentItem = safeArrayAccess(dailySummary, currentIndex);
             if (!currentItem) return;
             const cleared = { ...currentItem };
             cleared.countIncreased = false;
-            cleared.hourlyUpdated = [];
 
             dailySummary = [
               ...dailySummary.slice(0, currentIndex),
@@ -502,22 +489,11 @@ Performance Optimizations:
       );
     } else {
       // Add new species - sorting is handled by MerlinCard's sortedData derived value
-      const newSpecies: DailySpeciesSummary = {
-        scientific_name: detection.scientificName,
+      const newSpecies: MerlinSpeciesSummary = {
         common_name: detection.commonName,
-        species_code: detection.speciesCode,
         count: 1,
-        hourly_counts: Array(24).fill(0),
-        high_confidence: detection.confidence >= 0.8,
-        first_heard: detection.time,
-        latest_heard: detection.time,
-        thumbnail_url: '', // Empty string will trigger fallback in BirdThumbnailPopup
         isNew: true,
       };
-      // Set the hourly count for the specific hour safely using splice
-      if (hour >= 0 && hour < 24) {
-        newSpecies.hourly_counts.splice(hour, 1, 1);
-      }
 
       // Add to array - MerlinCard's sortedData will sort by count
       dailySummary = [...dailySummary, newSpecies];
@@ -532,13 +508,13 @@ Performance Optimizations:
           .slice(0, summaryLimit + SPECIES_LIMIT_BUFFER_TARGET);
       }
 
-      logger.debug(`Added new species: ${detection.commonName} (count: 1, hour: ${hour})`);
+      logger.debug(`Added new species: ${detection.commonName} (count: 1)`);
 
       // Clear animation flag after animation completes
       scheduleAnimationCleanup(
         () => {
           const currentIndex = dailySummary.findIndex(
-            s => s.species_code === detection.speciesCode
+            s => s.common_name === detection.commonName
           );
           if (currentIndex >= 0) {
             const currentItem = safeArrayAccess(dailySummary, currentIndex);

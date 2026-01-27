@@ -131,3 +131,12 @@ export interface DailySpeciesSummary {
   hourlyUpdated?: number[]; // Which hours were just updated
   previousCount?: number; // For animated counter
 }
+
+export interface MerlinSpeciesSummary {
+  common_name: string;
+  count: number;
+  // Animation state flags
+  isNew?: boolean; // New species row animation (temporary for SSE updates)
+  countIncreased?: boolean; // Count increment animation
+  previousCount?: number; // For animated counter
+}
