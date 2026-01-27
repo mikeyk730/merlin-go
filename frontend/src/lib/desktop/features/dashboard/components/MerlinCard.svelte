@@ -54,7 +54,7 @@ Responsive Breakpoints:
   import { ChevronLeft, ChevronRight, Star, Sunrise, Sunset, XCircle } from '@lucide/svelte';
   import { untrack } from 'svelte';
   import AnimatedCounter from './AnimatedCounter.svelte';
-  import BirdThumbnailPopup from './BirdThumbnailPopup.svelte';
+  import MerlinThumbnail from './MerlinThumbnail.svelte';
 
   const logger = loggers.ui;
 
@@ -96,8 +96,8 @@ Responsive Breakpoints:
     SPECIES_COLUMN: {
       BASE_WIDTH: 4, // rem - thumbnail (2) + gap (0.5) + padding (1) + buffer (0.5)
       CHAR_WIDTH: 0.52, // rem per character for text-sm font
-      MIN_WIDTH: 9, // rem - minimum column width
-      MAX_WIDTH: 22, // rem - maximum column width (prevents excessive width)
+      MIN_WIDTH: 50, // rem - minimum column width
+      MAX_WIDTH: 50, // rem - maximum column width (prevents excessive width)
     },
   } as const;
 
@@ -165,40 +165,6 @@ Responsive Breakpoints:
     }
   });
 
-  // Species badge color palette - 12 distinct, visually appealing colors
-  const BADGE_COLORS = $state.raw([
-    '#10b981', // emerald
-    '#f59e0b', // amber
-    '#ef4444', // red
-    '#8b5cf6', // violet
-    '#06b6d4', // cyan
-    '#ec4899', // pink
-    '#84cc16', // lime
-    '#f97316', // orange
-    '#6366f1', // indigo
-    '#14b8a6', // teal
-    '#a855f7', // purple
-    '#eab308', // yellow
-  ]);
-
-  // Generate a consistent color for a species based on its name
-  const getSpeciesBadgeColor = (speciesName: string): string => {
-    let hash = 0;
-    for (let i = 0; i < speciesName.length; i++) {
-      hash = speciesName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return BADGE_COLORS[Math.abs(hash) % BADGE_COLORS.length];
-  };
-
-  // Get initials from species common name (first letter of first two words)
-  const getSpeciesInitials = (commonName: string): string => {
-    const words = commonName.trim().split(/\s+/).filter(Boolean);
-    if (words.length === 0) return '??';
-    if (words.length === 1) {
-      return words[0].substring(0, 2).toUpperCase();
-    }
-    return (words[0][0] + words[1][0]).toUpperCase();
-  };
 
   /**
    * Calculate heatmap intensity using simple fixed-range scaling.
@@ -277,32 +243,6 @@ Responsive Breakpoints:
       safeArrayAccess(item.hourly_counts, hour, 0) ?? 0
   });
 
-  // Optimized data sorting using $derived.by for better performance
-  // Two-tier sorting: primary by count, secondary by latest detection time
-  // Also applies speciesLimit to cap the number of displayed species
-  const sortedData = $derived.by(() => {
-    // Early return for empty data
-    if (data.length === 0) return [];
-
-    // Use spread + sort with stable ordering
-    const sorted = [...data].sort((a: DailySpeciesSummary, b: DailySpeciesSummary) => {
-      // Primary sort: by detection count (descending)
-      if (b.count !== a.count) {
-        return b.count - a.count;
-      }
-      // Secondary sort: by latest detection time (descending - most recent first)
-      // This ensures stable ordering when counts are equal
-      return (b.latest_heard ?? '').localeCompare(a.latest_heard ?? '');
-    });
-
-    // Apply species limit after sorting to ensure top N species are shown
-    if (speciesLimit > 0 && sorted.length > speciesLimit) {
-      return sorted.slice(0, speciesLimit);
-    }
-
-    return sorted;
-  });
-
   // Calculate dynamic species column width based on longest name
   // This ensures all rows align properly regardless of name length
   // Uses CONFIG.SPECIES_COLUMN constants for easy adjustment
@@ -375,31 +315,20 @@ Responsive Breakpoints:
         >
           <!-- Species rows -->
           <div class="flex flex-col" style:gap="var(--grid-gap)">
-            {#each sortedData as item (item.scientific_name)}
+            {#each data as item (item.scientific_name)}
               <div
                 class="flex items-center species-row"
               >
                 <!-- Species info column -->
                 <div class="species-label-col shrink-0 flex items-center gap-2 pr-4">
-                  {#if showThumbnails}
-                    <BirdThumbnailPopup
+                    <MerlinThumbnail
                       thumbnailUrl={item.thumbnail_url ||
                         `/api/v2/media/species-image?name=${encodeURIComponent(item.scientific_name)}`}
                       commonName={item.common_name}
                       scientificName={item.scientific_name}
-                      detectionUrl="#"
                     />
-                  {:else}
-                    <a
-                      class="species-badge shrink-0"
-                      style:background-color={getSpeciesBadgeColor(item.common_name)}
-                      title={item.scientific_name}
-                    >
-                      {getSpeciesInitials(item.common_name)}
-                    </a>
-                  {/if}
                   <a
-                    class="text-sm hover:text-primary cursor-pointer font-medium leading-tight flex items-center gap-1 overflow-hidden"
+                    class="text-lg hover:text-primary cursor-pointer font-medium leading-tight flex items-center gap-1 overflow-hidden"
                     title={item.common_name}
                   >
                     <span class="truncate flex-1">{item.common_name}</span>
@@ -434,7 +363,7 @@ Responsive Breakpoints:
           </div>
         </div>
 
-        {#if sortedData.length === 0}
+        {#if data.length === 0}
           <div
             class="text-center py-8"
             style:color="color-mix(in srgb, var(--color-base-content) 60%, transparent)"
@@ -448,13 +377,22 @@ Responsive Breakpoints:
 {/if}
 
 <style>
+
+  @keyframes highlightRow {
+    0% { background-color: #ffff99; } /* Highlight color */
+    100% { background-color: transparent; }
+  }
+
+  .row-update {
+    animation: highlightRow 1.5s ease-out; /* Duration and timing */
+  }
   /* ========================================================================
      CSS Custom Properties for Daily Summary Grid
      Scoped to component to avoid global conflicts
      ======================================================================== */
   .daily-summary-card {
-    /* Grid layout properties */
-    --grid-cell-height: 1.25rem;
+    /* todo:mdk Grid layout properties */
+    --grid-cell-height: 3.0rem;
     --grid-cell-radius: 4px;
     --grid-gap: 4px; /* Gap between grid cells */
 
@@ -511,7 +449,7 @@ Responsive Breakpoints:
 
   /* Species row - consistent height */
   .species-row {
-    min-height: 2rem;
+    min-height: 5rem;
     border-radius: var(--grid-cell-radius);
     transition: background-color 0.15s ease;
   }
@@ -743,16 +681,6 @@ Responsive Breakpoints:
     z-index: 10;
   }
 
-  /* Respect user's reduced motion preference */
-  @media (prefers-reduced-motion: reduce) {
-    .count-increased,
-    .new-species,
-    .hour-updated {
-      animation: none;
-      transition: none;
-    }
-  }
-
   /* ========================================================================
      Species Column & Badge Styles
      ======================================================================== */
@@ -764,27 +692,6 @@ Responsive Breakpoints:
     padding: 0 0.75rem 0 0.5rem !important;
   }
 
-  .species-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem; /* w-8 - match thumbnail width */
-    height: 1.75rem; /* h-7 - match thumbnail height */
-    border-radius: 0.375rem;
-    font-size: 0.625rem;
-    font-weight: 700;
-    color: white;
-    text-decoration: none;
-    text-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
-    transition:
-      transform 0.15s ease,
-      box-shadow 0.15s ease;
-  }
-
-  .species-badge:hover {
-    transform: scale(1.1);
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
-  }
 
   /* ========================================================================
      Daylight Row Styles
@@ -912,72 +819,5 @@ Responsive Breakpoints:
 
   :global([data-theme='light']) .daylight-dusk {
     background-color: rgb(139 92 246 / 0.15); /* violet-500/15 */
-  }
-
-  /* Sun icon wrapper and tooltip styles */
-  .sun-icon-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 1.25rem; /* 20px - matches grid-daylight-height */
-    position: relative;
-    cursor: pointer;
-  }
-
-  .sun-tooltip {
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 4px;
-    padding: 2px 6px;
-    font-size: 10px;
-    font-weight: 600;
-    white-space: nowrap;
-    border-radius: 4px;
-    opacity: 0;
-    visibility: hidden;
-    transition:
-      opacity 0.15s ease-in-out,
-      visibility 0.15s ease-in-out;
-    pointer-events: none;
-
-    /* Force a new stacking context to escape sticky header */
-    isolation: isolate;
-    z-index: 9999;
-  }
-
-  .sun-icon-wrapper:hover .sun-tooltip {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  /* Sunrise tooltip - orange theme */
-  .sun-tooltip-sunrise {
-    background-color: #fff7ed; /* orange-50 */
-    color: #c2410c; /* orange-700 */
-    border: 1px solid #fed7aa; /* orange-200 */
-    box-shadow: 0 2px 8px rgb(251 146 60 / 0.25);
-  }
-
-  :global([data-theme='dark']) .sun-tooltip-sunrise {
-    background-color: #431407; /* orange-950 */
-    color: #fdba74; /* orange-300 */
-    border: 1px solid #7c2d12; /* orange-900 */
-  }
-
-  /* Sunset tooltip - rose/pink theme */
-  .sun-tooltip-sunset {
-    background-color: #fff1f2; /* rose-50 */
-    color: #be123c; /* rose-700 */
-    border: 1px solid #fecdd3; /* rose-200 */
-    box-shadow: 0 2px 8px rgb(251 113 133 / 0.25);
-  }
-
-  :global([data-theme='dark']) .sun-tooltip-sunset {
-    background-color: #4c0519; /* rose-950 */
-    color: #fda4af; /* rose-300 */
-    border: 1px solid #881337; /* rose-900 */
   }
 </style>
