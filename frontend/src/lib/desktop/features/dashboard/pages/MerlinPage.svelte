@@ -26,7 +26,6 @@ Date Persistence Strategy:
 Props: None (Page component)
 
 State Management:
-- selectedDate: Currently viewed date (YYYY-MM-DD format)
 - dailySummary: Array of species detection summaries for the selected date
 - Real-time updates tracked via newDetectionIds and hourlyUpdates
 
@@ -97,7 +96,6 @@ Performance Optimizations:
 
   // State management
   let dailySummary = $state<DailySpeciesSummary[]>([]);
-  let selectedDate = $state(getInitialDate());
   let isLoadingSummary = $state(false);
   let isLoadingDetections = $state(true);
   let summaryError = $state<string | null>(null);
@@ -605,13 +603,8 @@ Performance Optimizations:
     data={dailySummary}
     loading={isLoadingSummary}
     error={summaryError}
-    {selectedDate}
     {showThumbnails}
     speciesLimit={summaryLimit}
-    onPreviousDay={noop}
-    onNextDay={noop}
-    onGoToToday={noop}
-    onDateChange={noop}
   />
 
 </div>

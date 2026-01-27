@@ -4,7 +4,6 @@ DailySummaryCard.svelte - Daily bird species detection summary table
 Purpose:
 - Displays daily bird species summaries with hourly detection counts
 - Provides interactive heatmap visualization of detection patterns
-- Supports date navigation and real-time updates via SSE
 - Integrates sun times to highlight sunrise/sunset hours
 
 Features:
@@ -16,19 +15,13 @@ Features:
 - Real-time animation for new species and count increases
 - URL memoization with LRU cache for performance optimization
 - Heatmap legend showing intensity scale (Less → More)
-- Date picker navigation with keyboard shortcuts
 - Clickable cells linking to detailed detection views
 
 Props:
 - data: DailySpeciesSummary[] - Array of species detection summaries
 - loading?: boolean - Loading state indicator (default: false)
 - error?: string | null - Error message to display (default: null)
-- selectedDate: string - Currently selected date in YYYY-MM-DD format
 - showThumbnails?: boolean - Show thumbnails or colored badge placeholders (default: true)
-- onPreviousDay: () => void - Callback for previous day navigation
-- onNextDay: () => void - Callback for next day navigation
-- onGoToToday: () => void - Callback for "today" button click
-- onDateChange: (date: string) => void - Callback for date picker changes
 
 Performance Optimizations:
 - $state.raw() for static data structures (caches, render functions)
@@ -47,11 +40,9 @@ Responsive Breakpoints:
 -->
 
 <script lang="ts">
-  import DatePicker from '$lib/desktop/components/ui/DatePicker.svelte';
   import SkeletonDailySummary from '$lib/desktop/components/ui/SkeletonDailySummary.svelte';
   import { t } from '$lib/i18n';
   import type { DailySpeciesSummary } from '$lib/types/detection.types';
-  import { getLocalDateString, getLocalTimeString, parseLocalDateString } from '$lib/utils/date';
   import { loggers } from '$lib/utils/logger';
   import { LRUCache } from '$lib/utils/LRUCache';
   import { safeArrayAccess, safeGet } from '$lib/utils/security';
@@ -110,11 +101,6 @@ Responsive Breakpoints:
     },
   } as const;
 
-  interface SunTimes {
-    sunrise: string; // ISO date string
-    sunset: string; // ISO date string
-  }
-
   // Column type definitions
   interface BaseColumn {
     key: string;
@@ -134,51 +120,22 @@ Responsive Breakpoints:
     align: string;
   }
 
-  interface BiHourlyColumn extends BaseColumn {
-    type: 'bi-hourly';
-    hour: number;
-    align: string;
-  }
-
-  interface SixHourlyColumn extends BaseColumn {
-    type: 'six-hourly';
-    hour: number;
-    align: string;
-  }
-
-  type ColumnDefinition = SpeciesColumn | HourlyColumn | BiHourlyColumn | SixHourlyColumn;
-
-  // URL builder types
-  interface URLBuilders {
-    species: (_species: DailySpeciesSummary) => string;
-    speciesHour: (_species: DailySpeciesSummary, _hour: number, _duration?: number) => string;
-    hourly: (_hour: number, _duration?: number) => string;
-  }
+  type ColumnDefinition = SpeciesColumn | HourlyColumn;
 
   interface Props {
     data: DailySpeciesSummary[];
     loading?: boolean;
     error?: string | null;
-    selectedDate: string;
     showThumbnails?: boolean;
     speciesLimit?: number;
-    onPreviousDay: () => void;
-    onNextDay: () => void;
-    onGoToToday: () => void;
-    onDateChange: (_date: string) => void;
   }
 
   let {
     data = [],
     loading = false,
     error = null,
-    selectedDate,
     showThumbnails = true,
     speciesLimit = 0,
-    onPreviousDay,
-    onNextDay,
-    onGoToToday,
-    onDateChange,
   }: Props = $props();
 
   // Progressive loading state management
@@ -279,29 +236,7 @@ Responsive Breakpoints:
       header: hour.toString().padStart(2, '0'),
       align: 'center',
       className: 'hour-data hourly-count px-0',
-    })),
-    ...Array.from({ length: 12 }, (_, i) => {
-      const hour = i * 2;
-      return {
-        key: `bi_hour_${hour}`,
-        type: 'bi-hourly' as const,
-        hour,
-        header: hour.toString().padStart(2, '0'),
-        align: 'center',
-        className: 'hour-data bi-hourly-count bi-hourly px-0',
-      };
-    }),
-    ...Array.from({ length: 4 }, (_, i) => {
-      const hour = i * 6;
-      return {
-        key: `six_hour_${hour}`,
-        type: 'six-hourly' as const,
-        hour,
-        header: hour.toString().padStart(2, '0'),
-        align: 'center',
-        className: 'hour-data six-hourly-count six-hourly px-0',
-      };
-    }),
+    }))
   ]);
 
   // Reactive columns with only dynamic headers - use $derived.by for complex logic
@@ -320,7 +255,7 @@ Responsive Breakpoints:
   const loggedUnexpectedColumns = new Set<string>();
   $effect(() => {
     if (import.meta.env.DEV) {
-      const expectedTypes = new Set(['species', 'hourly', 'bi-hourly', 'six-hourly']);
+      const expectedTypes = new Set(['species', 'hourly']);
 
       columns.forEach(column => {
         if (!expectedTypes.has(column.type) && !loggedUnexpectedColumns.has(column.key)) {
@@ -339,97 +274,8 @@ Responsive Breakpoints:
   // Pre-computed render functions - use $state.raw for performance (static functions)
   const renderFunctions = $state.raw({
     hourly: (item: DailySpeciesSummary, hour: number) =>
-      safeArrayAccess(item.hourly_counts, hour, 0) ?? 0,
-    'bi-hourly': (item: DailySpeciesSummary, hour: number) =>
-      (safeArrayAccess(item.hourly_counts, hour, 0) ?? 0) +
-      (safeArrayAccess(item.hourly_counts, hour + 1, 0) ?? 0),
-    'six-hourly': (item: DailySpeciesSummary, hour: number) => {
-      let sum = 0;
-      for (let h = hour; h < hour + 6 && h < 24; h++) {
-        sum += safeArrayAccess(item.hourly_counts, h, 0) ?? 0;
-      }
-      return sum;
-    },
+      safeArrayAccess(item.hourly_counts, hour, 0) ?? 0
   });
-
-  // Phase 4: Optimized URL building with memoization for 90%+ performance improvement
-  const urlCache = $state.raw(new LRUCache<string, string>(CONFIG.CACHE.URL_MAX_ENTRIES));
-  const urlBuilders = $state<URLBuilders>({
-    // Default functions to prevent undefined errors during initial render
-    species: () => '#',
-    speciesHour: () => '#',
-    hourly: () => '#',
-  });
-
-  // Reactive URL builder factory - clears cache when selectedDate changes
-  $effect(() => {
-    // Clear cache when selectedDate changes to prevent stale URLs
-    urlCache.clear();
-
-    // Create optimized, memoized URL builders
-    urlBuilders.species = (species: DailySpeciesSummary) => {
-      const cacheKey = `species:${species.common_name}:${selectedDate}`;
-      if (!urlCache.has(cacheKey)) {
-        const params = new URLSearchParams({
-          queryType: 'species',
-          species: species.common_name,
-          date: selectedDate,
-          numResults: CONFIG.QUERY.DEFAULT_NUM_RESULTS.toString(),
-          offset: '0',
-        });
-        urlCache.set(cacheKey, `/ui/detections?${params.toString()}`);
-      }
-      return urlCache.get(cacheKey)!;
-    };
-
-    urlBuilders.speciesHour = (
-      species: DailySpeciesSummary,
-      hour: number,
-      duration: number = 1
-    ) => {
-      const cacheKey = `species-hour:${species.common_name}:${selectedDate}:${hour}:${duration}`;
-      if (!urlCache.has(cacheKey)) {
-        const params = new URLSearchParams({
-          queryType: 'species',
-          species: species.common_name,
-          date: selectedDate,
-          hour: hour.toString(),
-          duration: duration.toString(),
-          numResults: CONFIG.QUERY.DEFAULT_NUM_RESULTS.toString(),
-          offset: '0',
-        });
-        urlCache.set(cacheKey, `/ui/detections?${params.toString()}`);
-      }
-      return urlCache.get(cacheKey)!;
-    };
-
-    urlBuilders.hourly = (hour: number, duration: number = 1) => {
-      const cacheKey = `hourly:${selectedDate}:${hour}:${duration}`;
-      if (!urlCache.has(cacheKey)) {
-        const params = new URLSearchParams({
-          queryType: 'hourly',
-          date: selectedDate,
-          hour: hour.toString(),
-          duration: duration.toString(),
-          numResults: CONFIG.QUERY.DEFAULT_NUM_RESULTS.toString(),
-          offset: '0',
-        });
-        urlCache.set(cacheKey, `/ui/detections?${params.toString()}`);
-      }
-      return urlCache.get(cacheKey)!;
-    };
-  });
-
-  // LRU cache automatically manages memory, no need for periodic cleanup
-
-  const isToday = $derived(selectedDate === getLocalDateString());
-
-  // Check for reduced motion preference for performance and accessibility
-  const prefersReducedMotion = $derived(
-    typeof window !== 'undefined'
-      ? (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false)
-      : false
-  );
 
   // Optimized data sorting using $derived.by for better performance
   // Two-tier sorting: primary by count, secondary by latest detection time
@@ -532,7 +378,6 @@ Responsive Breakpoints:
             {#each sortedData as item (item.scientific_name)}
               <div
                 class="flex items-center species-row"
-                class:new-species={item.isNew && !prefersReducedMotion}
               >
                 <!-- Species info column -->
                 <div class="species-label-col shrink-0 flex items-center gap-2 pr-4">
@@ -542,11 +387,10 @@ Responsive Breakpoints:
                         `/api/v2/media/species-image?name=${encodeURIComponent(item.scientific_name)}`}
                       commonName={item.common_name}
                       scientificName={item.scientific_name}
-                      detectionUrl={urlBuilders.species(item)}
+                      detectionUrl="#"
                     />
                   {:else}
                     <a
-                      href={urlBuilders.species(item)}
                       class="species-badge shrink-0"
                       style:background-color={getSpeciesBadgeColor(item.common_name)}
                       title={item.scientific_name}
@@ -555,35 +399,10 @@ Responsive Breakpoints:
                     </a>
                   {/if}
                   <a
-                    href={urlBuilders.species(item)}
                     class="text-sm hover:text-primary cursor-pointer font-medium leading-tight flex items-center gap-1 overflow-hidden"
                     title={item.common_name}
                   >
                     <span class="truncate flex-1">{item.common_name}</span>
-                    {#if item.is_new_species}
-                      <span
-                        class="text-warning inline-block shrink-0"
-                        title={`New species (first seen ${item.days_since_first_seen ?? 0} day${(item.days_since_first_seen ?? 0) === 1 ? '' : 's'} ago)`}
-                      >
-                        <Star class="size-3 fill-current" />
-                      </span>
-                    {/if}
-                    {#if item.is_new_this_year && !item.is_new_species}
-                      <span
-                        class="text-info shrink-0"
-                        title={`First time this year (${item.days_this_year ?? 0} day${(item.days_this_year ?? 0) === 1 ? '' : 's'} ago)`}
-                      >
-                        📅
-                      </span>
-                    {/if}
-                    {#if item.is_new_this_season && !item.is_new_species && !item.is_new_this_year}
-                      <span
-                        class="text-success shrink-0"
-                        title={`First time this ${item.current_season || 'season'} (${item.days_this_season ?? 0} day${(item.days_this_season ?? 0) === 1 ? '' : 's'} ago)`}
-                      >
-                        🌿
-                      </span>
-                    {/if}
                   </a>
                 </div>
 
@@ -594,12 +413,10 @@ Responsive Breakpoints:
                     {@const intensity = getHeatmapIntensity(count)}
                     <div
                       class="heatmap-cell h-8 rounded-sm heatmap-color-{intensity} flex items-center justify-center text-xs font-medium"
-                      class:hour-updated={item.hourlyUpdated?.includes(hour) &&
-                        !prefersReducedMotion}
+                      class:hour-updated={item.hourlyUpdated?.includes(hour)}
                     >
                       {#if count > 0}
                         <a
-                          href={urlBuilders.speciesHour(item, hour, 1)}
                           class="w-full h-full flex items-center justify-center cursor-pointer hover:opacity-80"
                           title={t('dashboard.dailySummary.tooltips.hourlyDetections', {
                             count,
@@ -674,22 +491,9 @@ Responsive Breakpoints:
   }
 
   /* CSS Grid for hour columns - equal columns using minmax(0, 1fr) */
-  /* Default: show hourly (desktop), hide bi-hourly and six-hourly */
   .hourly-grid {
     display: grid;
     grid-template-columns: repeat(24, minmax(0, 1fr));
-    gap: var(--grid-gap);
-  }
-
-  .bi-hourly-grid {
-    display: none;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: var(--grid-gap);
-  }
-
-  .six-hourly-grid {
-    display: none;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--grid-gap);
   }
 
@@ -737,41 +541,20 @@ Responsive Breakpoints:
   /* Tablet (768-1023px): show bi-hourly */
   @media (min-width: 768px) and (max-width: 1023px) {
     .hourly-grid {
-      display: none;
-    }
-
-    .bi-hourly-grid {
       display: grid;
-    }
-
-    .six-hourly-grid {
-      display: none;
     }
   }
 
   /* Mobile (<768px): show bi-hourly */
   @media (max-width: 767px) {
     .hourly-grid {
-      display: none;
-    }
-
-    .bi-hourly-grid {
       display: grid;
-    }
-
-    .six-hourly-grid {
-      display: none;
     }
   }
 
   /* Small mobile (<480px): show six-hourly */
   @media (max-width: 479px) {
-    .hourly-grid,
-    .bi-hourly-grid {
-      display: none;
-    }
-
-    .six-hourly-grid {
+    .hourly-grid {
       display: grid;
     }
   }
