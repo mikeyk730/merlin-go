@@ -267,6 +267,43 @@ Responsive Breakpoints:
     return `${finalWidth}rem`;
   });
 
+  // Track which species have been highlighted recently (for restart detection)
+  const highlightedSpecies = $state.raw(new Map<string, number>());
+  
+  // Track previous counts to detect changes
+  const previousCounts = $state.raw(new Map<string, number>());
+  
+  // Track timeouts per species so we can cancel them on re-highlight
+  const highlightTimeouts = $state.raw(new Map<string, ReturnType<typeof setTimeout>>());
+
+  // Add effect to track count changes
+  $effect(() => {
+    data.forEach(item => {
+      const prevCount = previousCounts.get(item.common_name);
+      
+      if (prevCount !== item.count) {
+        // Clear any existing timeout for this species
+        const existingTimeout = highlightTimeouts.get(item.common_name);
+        if (existingTimeout !== undefined) {
+          clearTimeout(existingTimeout);
+        }
+        
+        const now = Date.now();
+        highlightedSpecies.set(item.common_name, now);
+        
+        // Set new timeout and store it
+        const timeout = setTimeout(() => {
+          highlightedSpecies.delete(item.common_name);
+          highlightTimeouts.delete(item.common_name);
+        }, 3000);
+        
+        highlightTimeouts.set(item.common_name, timeout);
+      }
+      
+      // Update previous count for next comparison
+      previousCounts.set(item.common_name, item.count);
+    });
+  });
 </script>
 
 
@@ -317,11 +354,13 @@ Responsive Breakpoints:
           <!-- Species rows -->
           <div class="flex flex-col" style:gap="var(--grid-gap)">
             {#each data as item (item.common_name)}
-              <div
-                class="flex items-center species-row"
-              >
-                <!-- Species info column -->
-                <div class="species-label-col shrink-0 flex items-center gap-2 pr-4">
+              {#key highlightedSpecies.get(item.common_name)}
+                <div
+                  class="flex items-center species-row"
+                  class:row-highlight={highlightedSpecies.has(item.common_name)}
+                >
+                  <!-- Species info column -->
+                  <div class="species-label-col shrink-0 flex items-center gap-2 pr-4">
                     <MerlinThumbnail
                       thumbnailUrl={
                         `/api/v2/media/species-image?name=${encodeURIComponent(item.common_name)}`}
@@ -350,6 +389,7 @@ Responsive Breakpoints:
                     </div>
                 </div>
               </div>
+              {/key}
             {/each}
           </div>
         </div>
@@ -369,28 +409,13 @@ Responsive Breakpoints:
 
 <style>
 
-  @keyframes highlightRow {
-    0% { background-color: #ffff99; } /* Highlight color */
+  @keyframes rowHighlight {
+    0% { background-color: #f8f07b; }
     100% { background-color: transparent; }
   }
 
-  .row-update {
-    animation: highlightRow 1.5s ease-out; /* Duration and timing */
-  }
-  
-    @keyframes speciesNameHighlight {
-    0% {
-      background-color: #ffff00;
-    }
-    100% {
-      background-color: transparent;
-    }
-  }
-
-  .species-name-updated {
-    animation: speciesNameHighlight 2s ease-out forwards;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
+  .row-highlight {
+    animation: rowHighlight 3s ease-out forwards;
   }
   
   /* ========================================================================

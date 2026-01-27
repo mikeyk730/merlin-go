@@ -345,6 +345,10 @@ Performance Optimizations:
     try {
       // Convert SSEDetectionData to Detection format
       for (let i in detectionData.predictions){
+        if (detectionData.predictions[i].commonName === 'bird sp.')
+        {
+          continue;
+        }
         const detection: Detection = {
           id: 1,
           commonName: detectionData.predictions[i].commonName,
