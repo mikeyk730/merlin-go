@@ -363,7 +363,7 @@ Responsive Breakpoints:
                   <div class="species-label-col shrink-0 flex items-center gap-2 pr-4">
                     <MerlinThumbnail
                       thumbnailUrl={
-                        `/api/v2/media/species-image?name=${encodeURIComponent(item.common_name)}`}
+                        `/api/v2/media/species-image?name=${encodeURIComponent(item.scientific_name)}`}
                       commonName={item.common_name}
                       scientificName={item.common_name}
                     />

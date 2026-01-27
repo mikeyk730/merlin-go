@@ -469,6 +469,7 @@ func (p *Processor) processDetections(item birdnet.Results) {
 			det := detectionResults[i]
 			predictions[i] = birdnet.MerlinPrediction{
 				CommonName: det.Result.Species.CommonName,
+				ScientificName: det.Result.Species.ScientificName,
 				Confidence: det.Result.Confidence,
 			}
 		}

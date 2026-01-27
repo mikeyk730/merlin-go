@@ -65,6 +65,7 @@ Performance Optimizations:
 
   type MdkTodo = {
     commonName: string;
+    scientificName: string;
     confidence: number;
   };
 
@@ -352,7 +353,7 @@ Performance Optimizations:
         const detection: Detection = {
           id: 1,
           commonName: detectionData.predictions[i].commonName,
-          scientificName: detectionData.predictions[i].commonName,
+          scientificName: detectionData.predictions[i].scientificName,
           confidence: detectionData.predictions[i].confidence,
           date: detectionData.datetime,
           time: detectionData.datetime,
@@ -495,6 +496,7 @@ Performance Optimizations:
       // Add new species - sorting is handled by MerlinCard's sortedData derived value
       const newSpecies: MerlinSpeciesSummary = {
         common_name: detection.commonName,
+        scientific_name: detection.scientificName,
         count: 1,
         isNew: true,
       };

@@ -134,6 +134,7 @@ export interface DailySpeciesSummary {
 
 export interface MerlinSpeciesSummary {
   common_name: string;
+  scientific_name: string;
   count: number;
   // Animation state flags
   isNew?: boolean; // New species row animation (temporary for SSE updates)

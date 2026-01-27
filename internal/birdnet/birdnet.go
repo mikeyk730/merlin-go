@@ -40,6 +40,7 @@ type speciesCacheEntry struct {
 
 type MerlinPrediction struct {
 	CommonName         string                  `json:"commonName"`
+	ScientificName     string                  `json:"scientificName"`
 	Confidence         float64                 `json:"confidence"`
 }
 
