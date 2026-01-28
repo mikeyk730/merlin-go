@@ -523,7 +523,8 @@ func ReadFromAnalysisBuffer(sourceID string) ([]byte, error) {
 	}
 
 	// Calculate the number of bytes written to the buffer
-	bytesWritten := ab.Length() - ab.Free()
+	//bytesWritten := ab.Length() - ab.Free() //todo:mdk bug?
+	bytesWritten := ab.Length()
 	if bytesWritten < readSize {
 		// Not enough data available - record metrics but return nil (not an error)
 		if m := getAnalysisMetrics(); m != nil {
