@@ -13,6 +13,90 @@ import (
 	tflite "github.com/tphakala/go-tflite"
 )
 
+// GenerateUiSpectrogram generates a spectrogram for the UI.
+// The samples are expected to be 512 samples of 22,050 Hz audio, normalized between -1.0 and 1.0.
+// It returns the spectrogram data as a float32 array with 257 elements.
+func (bn *BirdNET) GenerateUiSpectrogram(ctx context.Context, sample []float32) ([]float32, error) {
+	span, _ := StartSpan(ctx, "birdnet.soundid", "UI spectrogram generation")
+	defer span.Finish()
+
+	start := time.Now()
+
+	inputSize := 512
+	outputSize := 257
+	
+	if len(sample) != inputSize {
+		err := errors.New(fmt.Errorf("input sample length %d does not match expected length %d", len(sample), inputSize)).
+			Context("interpreter_state", "initialized").
+			Build()
+
+		// Record error in metrics via span finish
+		span.SetTag("error", "true")
+		span.SetData("error_type", "sample_length_mismatch")
+
+		return nil, err
+	}
+
+	inputTensor := bn.UISpectrogramInterpreter.GetInputTensor(0)
+	if inputTensor == nil {
+		err := errors.New(fmt.Errorf("cannot get spectrogram input tensor")).
+			Category(errors.CategoryModelInit).
+			ModelContext(bn.Settings.BirdNET.ModelPath, bn.ModelInfo.ID). //todo:mdk
+			Context("interpreter_state", "initialized").
+			Build()
+
+		// Record error in metrics via span finish
+		span.SetTag("error", "true")
+		span.SetData("error_type", "input_tensor_nil")
+
+		return nil, err
+	}
+
+	// The spectrogram generator produces a single column of the spectrogram.
+	// The generator expects 512 audio samples normalized between -1.0 and 1.0,
+	// and returns values for the 527 frequency bins.
+
+	currentWindow := inputTensor.Float32s()
+	for j := 0; j < inputSize; j++ {
+		currentWindow[j] = sample[j] //todo:mdk efficiency
+	}
+
+	if status := bn.UISpectrogramInterpreter.Invoke(); status != tflite.OK {
+		err := errors.Newf("spectrogram tensor invoke failed: %v", status).
+			Category(errors.CategoryAudio).
+			Context("hop_index", i).
+			Context("status_code", status).
+			Timing("spectrogram-invoke", time.Since(start)).
+			Build()
+			
+		span.SetTag("error", "true")
+		span.SetData("error_type", "spectrogram_invoke_failed")
+		span.SetData("status_code", status)
+		
+		return nil, err
+	}
+
+	outTensor := bn.UISpectrogramInterpreter.GetOutputTensor(0)
+	if outTensor == nil {
+		return nil, height, width, errors.New(fmt.Errorf("spectrogram output tensor nil")).
+			Category(errors.CategoryModelInit).
+			Build()
+	}
+
+	resultSize := outTensor.Dim(0)
+	if resultSize != outputSize {
+		err := errors.Newf("Unexpected output size %d, want %d", resultSize, outputSize).
+			Category(errors.CategoryModelInit).
+			Context("hop_index", i).
+			Build()
+		return nil, err
+	}
+	currentColumn := make([]byte, resultSize)
+	outTensor.CopyToBuffer(&currentColumn[0])
+
+	return currentColumn, nil
+}
+
 // GenerateSoundIdSpectrogram generates a spectrogram for the sound id model.
 // The samples are expected to be 3 seconds of 22,050 Hz audio, normalized between -1.0 and 1.0.
 // It returns the spectrogram data as a float32 slice in NHWC format (1, height, width, 3),

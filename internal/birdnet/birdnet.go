@@ -49,6 +49,7 @@ type BirdNET struct {
 	AnalysisInterpreter    *tflite.Interpreter
 	RangeInterpreter       *tflite.Interpreter
 	SpectrogramInterpreter *tflite.Interpreter
+	UISpectrogramInterpreter *tflite.Interpreter
 	Settings               *conf.Settings
 	ModelInfo              ModelInfo           // Information about the current model
 	TaxonomyMap            TaxonomyMap         // Mapping of species codes to names and vice versa
@@ -122,6 +123,16 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 	if RequiresSpectrogramGeneration(&bn.ModelInfo) {
 		if err := bn.initializeSpectrogramModel(); err != nil {
 			return nil, errors.New(fmt.Errorf("BirdNET: failed to initialize spectrogram model: %w", err)).
+				Component("birdnet").
+				Category(errors.CategoryModelInit).
+				ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
+				Build()
+		}
+	}
+	
+	if RequiresSpectrogramGeneration(&bn.ModelInfo) {
+		if err := bn.initializeUiSpectrogramModel(); err != nil {
+			return nil, errors.New(fmt.Errorf("BirdNET: failed to initialize ui spectrogram model: %w", err)).
 				Component("birdnet").
 				Category(errors.CategoryModelInit).
 				ModelContext(settings.BirdNET.ModelPath, modelIdentifier).
@@ -433,6 +444,46 @@ func (bn *BirdNET) getSpectrogramModelData() ([]byte, error) {
 		Build()
 }
 
+
+// getUiSpectrogramModelData returns the appropriate spectrogram model data based on the settings.
+func (bn *BirdNET) getUiSpectrogramModelData() ([]byte, error) {
+	// Check if external model path is specified
+	if bn.Settings.BirdNET.Spectrogram.UiModelPath != "" {
+		modelPath := bn.Settings.BirdNET.Spectrogram.UiModelPath
+
+		// Expand environment variables first
+		modelPath = os.ExpandEnv(modelPath)
+
+		// Then expand ~ to home directory if needed
+		if strings.HasPrefix(modelPath, "~/") {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, errors.New(err).
+					Category(errors.CategoryFileIO).
+					Context("path", modelPath).
+					Build()
+			}
+			modelPath = filepath.Join(homeDir, modelPath[2:])
+		}
+
+		// Load model from external file
+		data, err := os.ReadFile(modelPath) //nolint:gosec // G304: modelPath is from application settings
+		if err != nil {
+			return nil, errors.New(err).
+				Category(errors.CategoryFileIO).
+				Context("path", modelPath).
+				Build()
+		}
+
+		GetLogger().Info("Loaded ui spectrogram model", logger.String("path", modelPath))
+		return data, nil
+	}
+
+	return nil, errors.Newf("ui spectrogram model not available: embedded model is nil").
+		Category(errors.CategoryModelLoad).
+		Build()
+}
+
 // initializeSpectrogramModel loads and initializes the spectrogram model.
 func (bn *BirdNET) initializeSpectrogramModel() error {
 	start := time.Now()
@@ -471,6 +522,57 @@ func (bn *BirdNET) initializeSpectrogramModel() error {
 		return errors.Newf("tensor allocation failed for spectrogram model: %v", status).
 			Category(errors.CategoryModelInit).
 			Context("model_type", "spectrogram").
+			Context("status_code", status).
+			Timing("spectrogram-model-allocate", time.Since(start)).
+			Build()
+	}
+
+	// Force garbage collection to reclaim memory from spectrogram model loading
+	// The model data is no longer needed as TFLite has created its own internal copy
+	runtime.GC()
+
+	return nil
+}
+
+
+// initializeUiSpectrogramModel loads and initializes the UI spectrogram model.
+func (bn *BirdNET) initializeUiSpectrogramModel() error {
+	start := time.Now()
+
+	spectrogramModelData, err := bn.getUiSpectrogramModelData()
+	if err != nil {
+		return err
+	}
+
+	model := tflite.NewModel(spectrogramModelData)
+	if model == nil {
+		return errors.New(fmt.Errorf("cannot load ui spectrogram model from embedded data")).
+			Category(errors.CategoryModelLoad).
+			Context("model_type", "ui-spectrogram").
+			Timing("spectrogram-model-load", time.Since(start)).
+			Build()
+	}
+
+	// Spectrogram model requires only one CPU.
+	options := tflite.NewInterpreterOptions()
+	options.SetNumThread(1)
+	options.SetErrorReporter(func(msg string, user_data any) {
+		GetLogger().Error("TFLite ui spectrogram model error", logger.String("message", msg))
+	}, nil)
+
+	// Create and allocate the TensorFlow Lite interpreter for the spectrogram model.
+	bn.UISpectrogramInterpreter = tflite.NewInterpreter(model, options)
+	if bn.UISpectrogramInterpreter == nil {
+		return errors.New(fmt.Errorf("cannot create ui spectrogram model interpreter")).
+			Category(errors.CategoryModelInit).
+			Context("model_type", "ui-spectrogram").
+			Timing("spectrogram-model-init", time.Since(start)).
+			Build()
+	}
+	if status := bn.UISpectrogramInterpreter.AllocateTensors(); status != tflite.OK {
+		return errors.Newf("tensor allocation failed for ui spectrogram model: %v", status).
+			Category(errors.CategoryModelInit).
+			Context("model_type", "ui-spectrogram").
 			Context("status_code", status).
 			Timing("spectrogram-model-allocate", time.Since(start)).
 			Build()
