@@ -29,6 +29,7 @@ type ControlMonitor struct {
 	bufferManager  *BufferManager
 	proc           *processor.Processor
 	audioLevelChan chan myaudio.AudioLevelData
+	spectrogramChan chan myaudio.UiSpectrogramData
 	soundLevelChan chan myaudio.SoundLevelData
 	bn             *birdnet.BirdNET
 	apiController  *apiv2.Controller
@@ -51,7 +52,7 @@ type ControlMonitor struct {
 }
 
 // NewControlMonitor creates a new ControlMonitor instance
-func NewControlMonitor(wg *sync.WaitGroup, controlChan chan string, quitChan, restartChan chan struct{}, bufferManager *BufferManager, proc *processor.Processor, audioLevelChan chan myaudio.AudioLevelData, soundLevelChan chan myaudio.SoundLevelData, apiController *apiv2.Controller, metrics *observability.Metrics) *ControlMonitor {
+func NewControlMonitor(wg *sync.WaitGroup, controlChan chan string, quitChan, restartChan chan struct{}, bufferManager *BufferManager, proc *processor.Processor, audioLevelChan chan myaudio.AudioLevelData, spectrogramChan chan myaudio.UiSpectrogramData, soundLevelChan chan myaudio.SoundLevelData, apiController *apiv2.Controller, metrics *observability.Metrics) *ControlMonitor {
 	cm := &ControlMonitor{
 		wg:             wg,
 		controlChan:    controlChan,
@@ -59,6 +60,7 @@ func NewControlMonitor(wg *sync.WaitGroup, controlChan chan string, quitChan, re
 		restartChan:    restartChan,
 		bufferManager:  bufferManager,
 		audioLevelChan: audioLevelChan,
+		spectrogramChan: spectrogramChan,
 		soundLevelChan: soundLevelChan,
 		proc:           proc,
 		bn:             proc.Bn,
@@ -106,7 +108,7 @@ func (cm *ControlMonitor) initializeSoundLevelIfEnabled() {
 	if settings.Realtime.Audio.SoundLevel.Enabled {
 		// Initialize the sound level manager
 		if cm.soundLevelManager == nil {
-			cm.soundLevelManager = NewSoundLevelManager(cm.soundLevelChan, cm.proc, cm.apiController, cm.metrics)
+			cm.soundLevelManager = NewSoundLevelManager(cm.soundLevelChan, cm.spectrogramChan, cm.proc, cm.apiController, cm.metrics)
 		}
 
 		// Start sound level monitoring
@@ -376,6 +378,12 @@ func (cm *ControlMonitor) handleReconfigureStreams() {
 					// Channel full, drop data
 				}
 
+				select {
+				case cm.spectrogramChan <- unifiedData.SpectrogramData:
+				default:
+					// Channel full, drop data
+				}				
+				
 				// Send sound level data to existing sound level channel if present
 				if unifiedData.SoundLevel != nil {
 					select {
@@ -484,7 +492,7 @@ func (cm *ControlMonitor) handleReconfigureSoundLevel() {
 
 	// Initialize the sound level manager if not already created
 	if cm.soundLevelManager == nil {
-		cm.soundLevelManager = NewSoundLevelManager(cm.soundLevelChan, cm.proc, cm.apiController, cm.metrics)
+		cm.soundLevelManager = NewSoundLevelManager(cm.soundLevelChan, cm.spectrogramChan, cm.proc, cm.apiController, cm.metrics)
 	}
 
 	// Restart sound level monitoring with new settings

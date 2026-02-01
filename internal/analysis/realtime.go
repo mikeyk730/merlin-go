@@ -44,6 +44,8 @@ const (
 // audioLevelChan is a channel to send audio level updates
 var audioLevelChan = make(chan myaudio.AudioLevelData, 100)
 
+var spectrogramChan = make(chan myaudio.UiSpectrogramData, 100)
+
 // soundLevelChan is a channel to send sound level updates
 var soundLevelChan = make(chan myaudio.SoundLevelData, 100)
 
@@ -234,6 +236,7 @@ func RealtimeAnalysis(settings *conf.Settings) error {
 		api.WithMetrics(metrics),
 		api.WithControlChannel(controlChan),
 		api.WithAudioLevelChannel(audioLevelChan),
+		api.WithSpectrogramChannel(spectrogramChan),
 		api.WithOAuth2Server(oauth2Server),
 		api.WithSunCalc(sunCalc),
 	)
@@ -270,7 +273,7 @@ func RealtimeAnalysis(settings *conf.Settings) error {
 	}
 
 	// start audio capture
-	startAudioCapture(&wg, settings, quitChan, restartChan, audioLevelChan, soundLevelChan)
+	startAudioCapture(&wg, settings, quitChan, restartChan, audioLevelChan, spectrogramChan, soundLevelChan)
 
 	// Sound level monitoring is now managed by the control monitor for hot reload support.
 	// The control monitor will start sound level monitoring if enabled in settings.
@@ -487,13 +490,13 @@ func RealtimeAnalysis(settings *conf.Settings) error {
 			// Handle the restart signal.
 			GetLogger().Info("restarting audio capture",
 				logger.String("operation", "restart_audio_capture"))
-			startAudioCapture(&wg, settings, quitChan, restartChan, audioLevelChan, soundLevelChan)
+			startAudioCapture(&wg, settings, quitChan, restartChan, audioLevelChan, spectrogramChan, soundLevelChan)
 		}
 	}
 }
 
 // startAudioCapture initializes and starts the audio capture routine in a new goroutine.
-func startAudioCapture(wg *sync.WaitGroup, settings *conf.Settings, quitChan, restartChan chan struct{}, audioLevelChan chan myaudio.AudioLevelData, soundLevelChan chan myaudio.SoundLevelData) {
+func startAudioCapture(wg *sync.WaitGroup, settings *conf.Settings, quitChan, restartChan chan struct{}, audioLevelChan chan myaudio.AudioLevelData, spectrogramChan chan myaudio.UiSpectrogramData, soundLevelChan chan myaudio.SoundLevelData) {
 	// Stop previous demultiplexing goroutine if it exists
 	audioDemuxManager.Stop()
 
@@ -530,6 +533,16 @@ func startAudioCapture(wg *sync.WaitGroup, settings *conf.Settings, quitChan, re
 				default:
 					// Channel full, drop data
 				}
+				
+				select {
+				case <-doneChan:
+					return
+				case <-quitChan:
+					return
+				case spectrogramChan <- unifiedData.SpectrogramData:
+				default:
+					// Channel full, drop data
+				}				
 
 				// Send sound level data to existing sound level channel if present
 				if unifiedData.SoundLevel != nil {
@@ -1106,7 +1119,7 @@ func initBirdImageCache(ds datastore.Interface, metrics *observability.Metrics) 
 
 // startControlMonitor handles various control signals for realtime analysis mode
 func startControlMonitor(wg *sync.WaitGroup, controlChan chan string, quitChan, restartChan chan struct{}, bufferManager *BufferManager, proc *processor.Processor, apiController *apiv2.Controller, metrics *observability.Metrics) *ControlMonitor {
-	ctrlMonitor := NewControlMonitor(wg, controlChan, quitChan, restartChan, bufferManager, proc, audioLevelChan, soundLevelChan, apiController, metrics)
+	ctrlMonitor := NewControlMonitor(wg, controlChan, quitChan, restartChan, bufferManager, proc, audioLevelChan, spectrogramChan, soundLevelChan, apiController, metrics)
 	ctrlMonitor.Start()
 	return ctrlMonitor
 }

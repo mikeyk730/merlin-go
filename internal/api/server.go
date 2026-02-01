@@ -61,6 +61,7 @@ type Server struct {
 	// Channels
 	controlChan    chan string
 	audioLevelChan chan myaudio.AudioLevelData
+	spectrogramChan chan myaudio.UiSpectrogramData
 
 	// API controller
 	apiController *apiv2.Controller
@@ -129,6 +130,13 @@ func WithControlChannel(ch chan string) ServerOption {
 func WithAudioLevelChannel(ch chan myaudio.AudioLevelData) ServerOption {
 	return func(s *Server) {
 		s.audioLevelChan = ch
+	}
+}
+
+// WithSpectrogramChannel sets the spectrogram channel for SSE streaming.
+func WithSpectrogramChannel(ch chan myaudio.UiSpectrogramData) ServerOption {
+	return func(s *Server) {
+		s.spectrogramChan = ch
 	}
 }
 
@@ -290,7 +298,7 @@ func (s *Server) setupRoutes() error {
 	if s.audioLevelChan != nil {
 		s.apiController.SetAudioLevelChan(s.audioLevelChan)
 	}
-
+	
 	// Register SPA routes (after API controller for auth middleware access)
 	s.registerSPARoutes()
 

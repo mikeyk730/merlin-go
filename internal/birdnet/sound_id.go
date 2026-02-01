@@ -16,7 +16,7 @@ import (
 // GenerateUiSpectrogram generates a spectrogram for the UI.
 // The samples are expected to be 512 samples of 22,050 Hz audio, normalized between -1.0 and 1.0.
 // It returns the spectrogram data as a float32 array with 257 elements.
-func (bn *BirdNET) GenerateUiSpectrogram(ctx context.Context, sample []float32) ([]float32, error) {
+func (bn *BirdNET) GenerateUiSpectrogram(ctx context.Context, sample []float32) ([]byte, error) {
 	span, _ := StartSpan(ctx, "birdnet.soundid", "UI spectrogram generation")
 	defer span.Finish()
 
@@ -64,7 +64,6 @@ func (bn *BirdNET) GenerateUiSpectrogram(ctx context.Context, sample []float32) 
 	if status := bn.UISpectrogramInterpreter.Invoke(); status != tflite.OK {
 		err := errors.Newf("spectrogram tensor invoke failed: %v", status).
 			Category(errors.CategoryAudio).
-			Context("hop_index", i).
 			Context("status_code", status).
 			Timing("spectrogram-invoke", time.Since(start)).
 			Build()
@@ -78,7 +77,7 @@ func (bn *BirdNET) GenerateUiSpectrogram(ctx context.Context, sample []float32) 
 
 	outTensor := bn.UISpectrogramInterpreter.GetOutputTensor(0)
 	if outTensor == nil {
-		return nil, height, width, errors.New(fmt.Errorf("spectrogram output tensor nil")).
+		return nil, errors.New(fmt.Errorf("spectrogram output tensor nil")).
 			Category(errors.CategoryModelInit).
 			Build()
 	}
@@ -87,7 +86,6 @@ func (bn *BirdNET) GenerateUiSpectrogram(ctx context.Context, sample []float32) 
 	if resultSize != outputSize {
 		err := errors.Newf("Unexpected output size %d, want %d", resultSize, outputSize).
 			Category(errors.CategoryModelInit).
-			Context("hop_index", i).
 			Build()
 		return nil, err
 	}
@@ -139,7 +137,7 @@ func (bn *BirdNET) GenerateSoundIdSpectrogram(ctx context.Context, sample []floa
 	currentWindow := inputTensor.Float32s()
 	currentColumn := make([]byte, height)
 
-	for i := 0; i < width; i++ {
+	for i := 0; i < width; i++ { //todo:mdk helper function
 		hopStart := i * hopSize
 		for j := 0; j < windowSize; j++ {
 			currentWindow[j] = sample[hopStart+j]

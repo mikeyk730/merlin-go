@@ -151,6 +151,8 @@ type AudioLevelData struct {
 type UnifiedAudioData struct {
 	// Basic audio level information (always present)
 	AudioLevel AudioLevelData `json:"audio_level"`
+	
+	SpectrogramData UiSpectrogramData `json:"spectrogram_data,omitempty"` // Spectrogram data (optional)
 
 	// Sound level data (present only when 10-second window is complete)
 	SoundLevel *SoundLevelData `json:"sound_level,omitempty"`
@@ -638,7 +640,7 @@ func processAudioFrame(
 			// Non-fatal, just log
 		}
 	}
-
+	
 	// Write to buffers using source ID (use the safe bufferToUse)
 	if writeErr := WriteToAnalysisBuffer(sourceID, bufferToUse); writeErr != nil {
 		log.Warn("error writing to analysis buffer", logger.Error(writeErr))
@@ -648,16 +650,23 @@ func processAudioFrame(
 		log.Warn("error writing to capture buffer", logger.Error(writeErr))
 		// Potentially non-fatal, log and continue
 	}
-
+	
 	// Broadcast audio data using source ID (use the safe bufferToUse)
 	broadcastAudioData(sourceID, bufferToUse)
 
 	// Calculate audio level (use the safe bufferToUse)
 	audioLevelData := calculateAudioLevel(bufferToUse, sourceID, source.Name)
+	
+	spectrogramData, err := calculateSpectrogram(bufferToUse, sourceID, source.Name)
+	if err != nil {
+		log.Warn("error generating spectrogram", logger.Error(err))
+		// Potentially non-fatal, log and continue
+	}		
 
 	// Create unified audio data structure
 	unifiedData := UnifiedAudioData{
 		AudioLevel: audioLevelData,
+		SpectrogramData: spectrogramData,
 		Timestamp:  time.Now(),
 	}
 
@@ -783,6 +792,8 @@ func captureAudioMalgo(settings *conf.Settings, source captureSource, sourceID s
 				logger.String("source_name", source.Name))
 		}
 	}
+	
+	//todo:mdk register spectrogram processor here
 
 	var captureDevice *malgo.Device
 	var formatType malgo.FormatType // Declare formatType here
@@ -889,6 +900,25 @@ func logDeviceInfo(log logger.Logger, dev *malgo.Device, format malgo.FormatType
 		logger.Int("channels", int(dev.CaptureChannels())),
 		logger.Int("sample_rate", int(dev.SampleRate())))
 }
+
+func calculateSpectrogram(samples []byte, source, name string) (data UiSpectrogramData, err error) {
+	if len(samples) != 2048 {
+		return UiSpectrogramData{}, fmt.Errorf("no data provided for spectrogram generation")
+	}
+	
+	size := 257 * 4;
+	spectrogram := make([]byte, size)
+	
+	//todo:mdk run spectrogrm 4 times
+	spectrogram[12] = 255
+	
+	spectrogramData := UiSpectrogramData{
+		Spectrogram: spectrogram,
+	}
+	
+	return spectrogramData, nil
+}
+
 
 // calculateAudioLevel calculates the RMS (Root Mean Square) of the audio samples
 // and returns an AudioLevelData struct with the level and clipping status
