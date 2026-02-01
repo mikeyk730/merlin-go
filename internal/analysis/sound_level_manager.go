@@ -47,21 +47,22 @@ func (m *SoundLevelManager) Start() error {
 		return nil
 	}
 
-	settings := conf.Setting()
-	if !settings.Realtime.Audio.SoundLevel.Enabled {
-		log.Debug("sound level monitoring is disabled")
-		return nil
-	}
+	//todo:mdk
+	//settings := conf.Setting()
+	//if !settings.Realtime.Audio.SoundLevel.Enabled {
+		//log.Debug("sound level monitoring is disabled")
+		//return nil
+	//}
 
 	// Update debug log levels
-	updateSoundLevelDebugSettings()
+	//updateSoundLevelDebugSettings()
 
 	// Register sound level processors for all active sources
-	if err := registerSoundLevelProcessorsForActiveSources(settings); err != nil {
-		log.Error("failed to register sound level processors",
-			logger.Error(err))
-		return err
-	}
+	//if err := registerSoundLevelProcessorsForActiveSources(settings); err != nil {
+	//	log.Error("failed to register sound level processors",
+	//		logger.Error(err))
+	//	return err
+	//}
 
 	// Create done channel for this session
 	m.doneChan = make(chan struct{})

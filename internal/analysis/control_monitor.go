@@ -80,7 +80,7 @@ func (cm *ControlMonitor) Start() {
 
 	// Initialize sound level monitoring if enabled
 	cm.initializeSoundLevelIfEnabled()
-
+	
 	go cm.monitor()
 }
 
@@ -104,18 +104,21 @@ func (cm *ControlMonitor) Stop() {
 
 // initializeSoundLevelIfEnabled starts sound level monitoring if it's enabled in settings
 func (cm *ControlMonitor) initializeSoundLevelIfEnabled() {
-	settings := conf.Setting()
-	if settings.Realtime.Audio.SoundLevel.Enabled {
+	//todo:mdk
+	//settings := conf.Setting()
+	//if settings.Realtime.Audio.SoundLevel.Enabled {
 		// Initialize the sound level manager
 		if cm.soundLevelManager == nil {
 			cm.soundLevelManager = NewSoundLevelManager(cm.soundLevelChan, cm.spectrogramChan, cm.proc, cm.apiController, cm.metrics)
 		}
 
+		GetLogger().Info("starting sound level/spectrogram monitoring")
+		
 		// Start sound level monitoring
 		if err := cm.soundLevelManager.Start(); err != nil {
 			GetLogger().Warn("Failed to start sound level monitoring", logger.Error(err))
 		}
-	}
+	//}
 }
 
 // initializeTelemetryIfEnabled starts the telemetry endpoint if it's enabled in settings.

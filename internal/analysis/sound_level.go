@@ -529,7 +529,8 @@ func startSoundLevelSSEPublisherWithDone(wg *sync.WaitGroup, doneChan chan struc
 	}()
 
 	// Call the refactored function with context and receive-only channel
-	startSoundLevelSSEPublisher(wg, ctx, apiController, soundLevelChan)
+	//todo:mdk
+	// startSoundLevelSSEPublisher(wg, ctx, apiController, soundLevelChan)
 	startSpectrogramSSEPublisher(wg, ctx, apiController, spectrogramChan)
 }
 
