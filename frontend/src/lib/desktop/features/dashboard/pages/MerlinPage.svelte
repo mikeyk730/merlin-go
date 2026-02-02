@@ -472,12 +472,12 @@ Performance Optimizations:
   }
     
   function handleSpectrogramData(bytes: Uint8Array) {
-    console.log(bytes.length);
+    //console.log(bytes.length);
     
-    draw(bytes.slice(0, 512));
-    draw(bytes.slice(512, 1024));
-    draw(bytes.slice(1024, 1536));
-    draw(bytes.slice(1536, 2048));
+    draw(bytes.slice(0, 257));
+    draw(bytes.slice(257, 514));
+    //draw(bytes.slice(514, 771));
+    //draw(bytes.slice(771, 1028));
   }
   
   function draw(freqArray: Uint8Array) {
@@ -499,15 +499,19 @@ Performance Optimizations:
       return;
     }
     
+    let n = 3;
+    
     // Shift existing content left by 1 pixel
-    ctx.drawImage(canvas, -1, 0);
+    ctx.drawImage(canvas, -1*n, 0);
     
     // Draw new slice on the right edge
-    const col = canvas.width - 1;
+    const col = canvas.width - n;
+    //console.log(freqArray.length)
+    //console.log(freqArray)
     for (let i = 0; i < freqArray.length; i++) {
-      const value = freqArray[i];
+      const value = 255 - freqArray[i];
       ctx.fillStyle = `rgb(${value}, ${value}, ${value})`;
-      ctx.fillRect(col, canvas.height - i, 1, 1);
+      ctx.fillRect(col, i, n, 1);
     }
   }
 

@@ -1005,33 +1005,22 @@ func calculateSpectrogram(interpreter *tflite.Interpreter, samples []byte, sourc
 		return UiSpectrogramData{}, fmt.Errorf("no data provided for spectrogram generation")
 	}
 	
-	size := 257 * 4;
+	input := convert16BitToFloat32x(samples) // 1024 samples
+	size := 257 * 2;
 	
 	spectrogram := make([]byte, size)
 	
-	spectrogram1, err := GenerateUiSpectrogram(interpreter, samples[0:512])
+	spectrogram1, err := GenerateUiSpectrogram(interpreter, input[0:512])
 	if err != nil {
 		return UiSpectrogramData{}, err
 	}
 	copy(spectrogram[0:257], spectrogram1)
 
-	spectrogram2, err := GenerateUiSpectrogram(interpreter, samples[512:1024])
+	spectrogram2, err := GenerateUiSpectrogram(interpreter, input[512:1024])
 	if err != nil {
 		return UiSpectrogramData{}, err
 	}
 	copy(spectrogram[257:514], spectrogram2)
-
-	spectrogram3, err := GenerateUiSpectrogram(interpreter, samples[1024:1536])
-	if err != nil {
-		return UiSpectrogramData{}, err
-	}
-	copy(spectrogram[514:771], spectrogram3)
-
-	spectrogram4, err := GenerateUiSpectrogram(interpreter, samples[1536:2048])
-	if err != nil {
-		return UiSpectrogramData{}, err
-	}
-	copy(spectrogram[771:1028], spectrogram4)
 
 	spectrogramData := UiSpectrogramData{
 		Spectrogram: spectrogram,
@@ -1040,10 +1029,35 @@ func calculateSpectrogram(interpreter *tflite.Interpreter, samples []byte, sourc
 	return spectrogramData, nil
 }
 
+
+// convert16BitToFloat32 converts 16-bit sample to float32 values.
+func convert16BitToFloat32x(sample []byte) []float32 {
+	length := len(sample) / 2
+
+	// Try to get buffer from pool if available
+	var float32Data []float32
+	if float32Pool != nil && length == Float32BufferSize {
+		float32Data = float32Pool.Get()
+	} else {
+		// Fallback to allocation for non-standard sizes or if pool not initialized
+		float32Data = make([]float32, length)
+	}
+
+	divisor := float32(32768.0)
+
+	for i := range length {
+		sample := int16(sample[i*2]) | int16(sample[i*2+1])<<8
+		float32Data[i] = float32(sample) / divisor
+	}
+
+	return float32Data
+}
+
+
 // GenerateUiSpectrogram generates a spectrogram for the UI.
 // The samples are expected to be 512 samples of 22,050 Hz audio, normalized between -1.0 and 1.0.
 // It returns the spectrogram data as a float32 array with 257 elements.
-func GenerateUiSpectrogram(interpreter *tflite.Interpreter, sample []byte) ([]byte, error) {
+func GenerateUiSpectrogram(interpreter *tflite.Interpreter, sample []float32) ([]byte, error) {
 	start := time.Now()
 
 	inputSize := 512
@@ -1071,7 +1085,7 @@ func GenerateUiSpectrogram(interpreter *tflite.Interpreter, sample []byte) ([]by
 
 	currentWindow := inputTensor.Float32s()
 	for j := 0; j < inputSize; j++ {
-		currentWindow[j] = (float32(sample[j]) * 2.0 / 255.0) - 1.0 //todo:mdk efficiency
+		currentWindow[j] = sample[j]
 	}
 
 	if status := interpreter.Invoke(); status != tflite.OK {
