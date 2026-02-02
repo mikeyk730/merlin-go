@@ -371,12 +371,152 @@ Performance Optimizations:
       logger.error('Error processing detection data:', error);
     }
   }
+  
+  let spectrogramEventSource: ReconnectingEventSource | null = null;
+  
+  // Connect to SSE stream for real-time updates using ReconnectingEventSource
+  function connectToSpectrogramStream() {
+    logger.debug('Connecting to SSE stream at /api/v2/spectrogram/stream');
+
+    // Clean up existing connection
+    if (spectrogramEventSource) {
+      spectrogramEventSource.close();
+      spectrogramEventSource = null;
+    }
+
+    try {
+      // ReconnectingEventSource with configuration
+      spectrogramEventSource = new ReconnectingEventSource('/api/v2/spectrogram/stream', {
+        max_retry_time: 30000, // Max 30 seconds between reconnection attempts
+        withCredentials: false,
+      });
+
+      spectrogramEventSource.onopen = () => {
+        logger.debug('SSE connection opened for spectrogram');
+      };
+
+      spectrogramEventSource.onmessage = event => {
+        console.log('foo')
+        try {
+          const data = JSON.parse(event.data);
+
+          // Check if this is a structured message with eventType
+          if (data.eventType) {
+            switch (data.eventType) {
+              case 'connected':
+                logger.debug('Connected to detection stream:', data);
+                break;
+
+              case 'ui_spectrogram':
+                console.log(data); //todo:mdk
+                break;
+
+              case 'heartbeat':
+                logger.debug('SSE heartbeat received, clients:', data.clients);
+                break;
+
+              default:
+                logger.debug('Unknown event type:', data.eventType);
+            }
+          }
+        } catch (error) {
+          logger.error('Failed to parse SSE message:', error);
+        }
+      };
+
+      // Handle specific event types
+      // Handle specific event types
+      spectrogramEventSource.addEventListener('connected', (event: Event) => {
+        try {
+          // eslint-disable-next-line no-undef
+          const messageEvent = event as MessageEvent;
+          const data = JSON.parse(messageEvent.data);
+          logger.debug('Connected event received:', data);
+        } catch (error) {
+          logger.error('Failed to parse connected event:', error);
+        }
+      });
+
+      spectrogramEventSource.addEventListener('ui_spectrogram', (event: Event) => {
+        try {
+          // eslint-disable-next-line no-undef
+          const messageEvent = event as MessageEvent;
+          const data = JSON.parse(messageEvent.data);
+          handleSpectrogramData(Uint8Array.fromBase64(data.spectrogram));
+        } catch (error) {
+          logger.error('Failed to parse detection event:', error);
+        }
+      });
+
+      spectrogramEventSource.addEventListener('heartbeat', (event: Event) => {
+        try {
+          // eslint-disable-next-line no-undef
+          const messageEvent = event as MessageEvent;
+          const data = JSON.parse(messageEvent.data);
+          logger.debug('Heartbeat event received, clients:', data.clients);
+        } catch (error) {
+          logger.error('Failed to parse heartbeat event:', error);
+        }
+      });
+
+      spectrogramEventSource.onerror = (error: Event) => {
+        logger.error('SSE connection error:', error);
+        // ReconnectingEventSource handles reconnection automatically
+        // No need for manual reconnection logic
+      };
+    } catch (error) {
+      logger.error('Failed to create ReconnectingEventSource:', error);
+      // Try again in 5 seconds if initial setup fails
+      setTimeout(() => connectToSpectrogramStream(), 5000);
+    }
+  }
+    
+  function handleSpectrogramData(bytes: Uint8Array) {
+    console.log(bytes.length);
+    
+    draw(bytes.slice(0, 512));
+    draw(bytes.slice(512, 1024));
+    draw(bytes.slice(1024, 1536));
+    draw(bytes.slice(1536, 2048));
+  }
+  
+  function draw(freqArray: Uint8Array) {
+    requestAnimationFrame(function() {
+        dodraw(freqArray);
+    });
+  }
+  
+  function dodraw(freqArray: Uint8Array) {
+    const canvas = <HTMLCanvasElement> document.getElementById('spectrogram');
+    if (canvas === null) {
+      console.log("canvas is null");
+      return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) {
+      console.log("ctx is null");
+      return;
+    }
+    
+    // Shift existing content left by 1 pixel
+    ctx.drawImage(canvas, -1, 0);
+    
+    // Draw new slice on the right edge
+    const col = canvas.width - 1;
+    for (let i = 0; i < freqArray.length; i++) {
+      const value = freqArray[i];
+      ctx.fillStyle = `rgb(${value}, ${value}, ${value})`;
+      ctx.fillRect(col, canvas.height - i, 1, 1);
+    }
+  }
 
   onMount(() => {
     fetchDashboardConfig();
 
     // Setup SSE connection for real-time updates
     connectToDetectionStream();
+    connectToSpectrogramStream();
 
     return () => {
       // Clean up SSE connection
@@ -580,6 +720,8 @@ Performance Optimizations:
 </script>
 
 <div class="col-span-12">
+  <canvas id="spectrogram" width="800" height="257"></canvas>
+
   <!-- Daily Summary Section -->
   <MerlinCard
     data={dailySummary}

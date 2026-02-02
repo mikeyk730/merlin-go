@@ -607,7 +607,7 @@ func (c *Controller) StreamMerlin(ctx echo.Context) error {
 
 // StreamSpectrogram handles the SSE connection for real-time spectrogram streaming
 func (c *Controller) StreamSpectrogram(ctx echo.Context) error {
-	return c.handleSSEStream(ctx, streamTypeSpectrogram, "Connected to spectrogram stream", "spectrogram",
+	return c.handleSSEStream(ctx, streamTypeSpectrogram, "Connected to spectrogram stream", "ui_spectrogram",
 		func(client *SSEClient) {
 			client.Channel = make(chan SSEDetectionData, sseMinimalBufferSize)            // Minimal buffer, not used for spectrograms
 			client.SpectrogramChan = make(chan SSEUiSpectrogramData, sseSpectrogramBufferSize) // Buffer for ui spectrogram data
@@ -625,7 +625,7 @@ func (c *Controller) StreamSpectrogram(ctx echo.Context) error {
 						return nil, false
 					}
 				},
-				"spectrogram",
+				"ui_spectrogram",
 				streamTypeSpectrogram,
 			)
 		})
