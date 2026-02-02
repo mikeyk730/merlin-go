@@ -435,25 +435,6 @@ Responsive Breakpoints:
     width: var(--species-col-width, var(--species-col-min-width));
   }
 
-  /* CSS Grid for hour columns - equal columns using minmax(0, 1fr) */
-  .hourly-grid {
-    display: grid;
-    grid-template-columns: repeat(24, minmax(0, 1fr));
-    gap: var(--grid-gap);
-  }
-
-  /* Heatmap cell base styles */
-  .heatmap-cell {
-    transition:
-      opacity 0.15s ease,
-      transform 0.15s ease;
-  }
-
-  .heatmap-cell a {
-    color: inherit;
-    text-decoration: none;
-  }
-
   /* Species row - consistent height */
   .species-row {
     min-height: 5rem;
@@ -477,31 +458,6 @@ Responsive Breakpoints:
 
   :global([data-theme='dark'] .heatmap-color-0) {
     background-color: #1e293b;
-  }
-
-  /* ========================================================================
-     Responsive Grid Display
-     ======================================================================== */
-
-  /* Tablet (768-1023px): show bi-hourly */
-  @media (min-width: 768px) and (max-width: 1023px) {
-    .hourly-grid {
-      display: grid;
-    }
-  }
-
-  /* Mobile (<768px): show bi-hourly */
-  @media (max-width: 767px) {
-    .hourly-grid {
-      display: grid;
-    }
-  }
-
-  /* Small mobile (<480px): show six-hourly */
-  @media (max-width: 479px) {
-    .hourly-grid {
-      display: grid;
-    }
   }
 
   /* ========================================================================

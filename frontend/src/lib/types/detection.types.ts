@@ -33,6 +33,18 @@ export interface Detection {
   currentSeason?: string; // Current season name
 }
 
+export interface Prediction {
+  commonName: string;
+  scientificName: string;
+  confidence: number;
+};
+
+export interface ModelPredictions {
+  predictions: Prediction[];
+  datetime: string; // YYYY-MM-DD
+};
+
+
 export interface PaginatedDetectionResponse {
   data: Detection[];
   total: number;

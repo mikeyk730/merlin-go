@@ -26,8 +26,7 @@ Date Persistence Strategy:
 Props: None (Page component)
 
 State Management:
-- dailySummary: Array of species detection summaries for the selected date
-- Real-time updates tracked via newDetectionIds and hourlyUpdates
+- speciesSummary: Array of species detection summaries for the selected date
 
 Performance Optimizations:
 - Adjacent date preloading for instant navigation
@@ -40,7 +39,7 @@ Performance Optimizations:
   import ReconnectingEventSource from 'reconnecting-eventsource';
   import MerlinCard from '$lib/desktop/features/dashboard/components/MerlinCard.svelte';
   import { t } from '$lib/i18n';
-  import type { MerlinSpeciesSummary, Detection } from '$lib/types/detection.types';
+  import type { MerlinSpeciesSummary, ModelPredictions, Prediction } from '$lib/types/detection.types';
   import {
     parseHour,
   } from '$lib/utils/date';
@@ -63,19 +62,7 @@ Performance Optimizations:
   const SPECIES_LIMIT_BUFFER_TRIGGER = 10;
   const SPECIES_LIMIT_BUFFER_TARGET = 5;
 
-  type MdkTodo = {
-    commonName: string;
-    scientificName: string;
-    confidence: number;
-  };
-
-  // SSE Detection Data Type
-  type SSEDetectionData = {
-    predictions: MdkTodo[];
-    datetime: string; // YYYY-MM-DD
-  };
-
-  function isSSEDetectionData(v: unknown): v is SSEDetectionData {
+  function isModelPredictions(v: unknown): v is ModelPredictions {
     if (!isPlainObject(v)) return false;
     return true;
     //const o = v as Record<string, unknown>;
@@ -90,13 +77,13 @@ Performance Optimizations:
     //  typeof o.Confidence === 'number' &&
     //  dateOk &&
     //  timeOk &&
-    //  typeof o.SpeciesCode === 'string' &&
-    //  o.SpeciesCode.length > 0
+    //  typeof o.scientificName === 'string' &&
+    //  o.scientificName.length > 0
     //);
   }
 
   // State management
-  let dailySummary = $state<MerlinSpeciesSummary[]>([]);
+  let speciesSummary = $state<MerlinSpeciesSummary[]>([]);
   let isLoadingSummary = $state(false);
   let isLoadingDetections = $state(true);
   let summaryError = $state<string | null>(null);
@@ -109,15 +96,6 @@ Performance Optimizations:
 
   // Animation state for new detections
   let newDetectionIds = $state(new Set<number>());
-  let detectionArrivalTimes = $state(new Map<number, number>());
-
-  // Update freeze tracking to prevent SSE updates during user interactions (menus, audio playback, etc.)
-  let freezeCount = $state(0);
-  let pendingDetectionQueue = $state<Detection[]>([]);
-
-  // Debouncing for rapid daily summary updates
-  let updateQueue = $state(new Map<string, Detection>());
-  let updateTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function fetchDashboardConfig() {
     try {
@@ -144,7 +122,6 @@ Performance Optimizations:
   function handleManualRefresh() {
     // Clear animation state on manual refresh
     newDetectionIds.clear();
-    detectionArrivalTimes.clear();
   }
 
   // Animation cleanup timers and RAF manager - use $state.raw() for performance
@@ -154,7 +131,7 @@ Performance Optimizations:
 
   // Clear animation states from daily summary
   function clearDailySummaryAnimations() {
-    dailySummary = dailySummary.map(species => ({
+    speciesSummary = speciesSummary.map(species => ({
       ...species,
       isNew: false,
       countIncreased: false,
@@ -215,24 +192,6 @@ Performance Optimizations:
 
   // SSE connection for real-time detection updates
   let eventSource: ReconnectingEventSource | null = null;
-
-  // Process new detection from SSE - queue if updates are frozen, otherwise process immediately
-  function handleNewDetection(detection: Detection) {
-    // If any interactions are active (menus, audio playback), queue the detection for later processing
-    if (freezeCount > 0) {
-      // Avoid duplicate detections in queue - add null-safety check
-      const isDuplicate = pendingDetectionQueue.some(
-        pending => pending?.id != null && detection?.id != null && pending.id === detection.id
-      );
-      if (!isDuplicate) {
-        pendingDetectionQueue.push(detection);
-      }
-      return;
-    }
-
-    // Process immediately if no interactions are active
-    processDetectionUpdate(detection);
-  }
 
   // Connect to SSE stream for real-time updates using ReconnectingEventSource
   function connectToDetectionStream() {
@@ -335,7 +294,7 @@ Performance Optimizations:
 
   // Helper function to process SSE detection data
   function handleSSEDetection(detectionData: unknown) {
-    if (!isSSEDetectionData(detectionData)) {
+    if (!isModelPredictions(detectionData)) {
       const keys =
         typeof detectionData === 'object' && detectionData !== null
           ? Object.keys(detectionData as Record<string, unknown>)
@@ -344,29 +303,7 @@ Performance Optimizations:
       return;
     }
     try {
-      // Convert SSEDetectionData to Detection format
-      for (let i in detectionData.predictions){
-        if (detectionData.predictions[i].commonName === 'bird sp.')
-        {
-          continue;
-        }
-        const detection: Detection = {
-          id: 1,
-          commonName: detectionData.predictions[i].commonName,
-          scientificName: detectionData.predictions[i].scientificName,
-          confidence: detectionData.predictions[i].confidence,
-          date: detectionData.datetime,
-          time: detectionData.datetime,
-          speciesCode: detectionData.predictions[i].commonName,
-          verified: 'unverified',
-          locked: false,
-          source: '',
-          beginTime: '',
-          endTime: '',
-        };
-
-        handleNewDetection(detection);
-      }
+      handleNewPrediction(detectionData);
     } catch (error) {
       logger.error('Error processing detection data:', error);
     }
@@ -528,10 +465,10 @@ Performance Optimizations:
         eventSource.close();
         eventSource = null;
       }
-
-      // Clean up debounce timer
-      if (updateTimer) {
-        clearTimeout(updateTimer);
+      
+      if (spectrogramEventSource) {
+        spectrogramEventSource.close();
+        spectrogramEventSource = null;
       }
 
       // Clean up SSE fetch throttling timer
@@ -555,60 +492,39 @@ Performance Optimizations:
     };
   });
 
-
-  function noop() {
-  }
-
-  // Queue daily summary updates with debouncing for rapid updates
-  function queueDailySummaryUpdate(detection: Detection) {
-    // Performance: Skip if too many pending updates to prevent UI freeze
-    if (updateQueue.size > 20) {
-      logger.warn('Too many pending daily summary updates, skipping to prevent performance issues');
-      return;
+  // Incremental daily summary update when new detection arrives via SSE
+  function handleNewPrediction(data: ModelPredictions) {
+    for (var i in data.predictions)
+    {
+      let p = data.predictions[i];
+      if (p.commonName == "bird sp.")
+      {
+        continue;
+      }
+      handleNewDetection(p);
     }
-
-    // Add to queue (overwrites previous detection for same species)
-    updateQueue.set(detection.speciesCode, detection);
-
-    // Clear existing timer and set new one
-    if (updateTimer) {
-      clearTimeout(updateTimer);
-    }
-
-    updateTimer = setTimeout(() => {
-      // Process all queued updates in order of species code for consistency
-      const sortedUpdates = Array.from(updateQueue.entries()).sort(([a], [b]) =>
-        a.localeCompare(b)
-      );
-
-      sortedUpdates.forEach(([_, queuedDetection]) => {
-        updateDailySummary(queuedDetection);
-      });
-
-      updateQueue.clear();
-      updateTimer = null;
-    }, 150); // Batch updates within 150ms window
   }
 
   // Incremental daily summary update when new detection arrives via SSE
-  function updateDailySummary(detection: Detection) {
+  function handleNewDetection(detection: Prediction) {
 
-    const existingIndex = dailySummary.findIndex(s => s.common_name === detection.commonName);
+    const existingIndex = speciesSummary.findIndex(s => s.common_name === detection.commonName);
 
     if (existingIndex >= 0) {
-      // Update existing species - MerlinCard's sortedData handles reordering
-      const existing = safeArrayAccess(dailySummary, existingIndex);
-      if (!existing) return;
+      // Update existing species
+      const existing = safeArrayAccess(speciesSummary, existingIndex);
+      if (!existing) 
+        return;
       const updated = { ...existing };
       updated.previousCount = updated.count;
       updated.count++;
       updated.countIncreased = true;
 
-      // Update in place - sorting is handled by MerlinCard's sortedData derived value
-      dailySummary = [
-        ...dailySummary.slice(0, existingIndex),
+      // Update in place
+      speciesSummary = [
+        ...speciesSummary.slice(0, existingIndex),
         updated,
-        ...dailySummary.slice(existingIndex + 1),
+        ...speciesSummary.slice(existingIndex + 1),
       ];
       logger.debug(
         `Updated species: ${detection.commonName} (count: ${updated.count})`
@@ -617,109 +533,66 @@ Performance Optimizations:
       // Clear animation flags after animation completes
       scheduleAnimationCleanup(
         () => {
-          const currentIndex = dailySummary.findIndex(
+          const currentIndex = speciesSummary.findIndex(
             s => s.common_name === detection.commonName
           );
           if (currentIndex >= 0) {
-            const currentItem = safeArrayAccess(dailySummary, currentIndex);
-            if (!currentItem) return;
+            const currentItem = safeArrayAccess(speciesSummary, currentIndex);
+            if (!currentItem) 
+              return;
             const cleared = { ...currentItem };
             cleared.countIncreased = false;
 
-            dailySummary = [
-              ...dailySummary.slice(0, currentIndex),
+            speciesSummary = [
+              ...speciesSummary.slice(0, currentIndex),
               cleared,
-              ...dailySummary.slice(currentIndex + 1),
+              ...speciesSummary.slice(currentIndex + 1),
             ];
           }
         },
         1000,
-        `count-${detection.speciesCode}`
+        `count-${detection.scientificName}`
       );
     } else {
-      // Add new species - sorting is handled by MerlinCard's sortedData derived value
+      // Add new species
       const newSpecies: MerlinSpeciesSummary = {
         common_name: detection.commonName,
         scientific_name: detection.scientificName,
         count: 1,
+        previousCount: 0,
+        countIncreased: true,
         isNew: true,
       };
 
-      // Add to array - MerlinCard's sortedData will sort by count
-      dailySummary = [...dailySummary, newSpecies];
-
-      // Enforce species count limit to prevent grid from growing indefinitely
-      // Note: This is a safety limit before sorting; MerlinCard applies final limit after sorting
-      if (summaryLimit > 0 && dailySummary.length > summaryLimit + SPECIES_LIMIT_BUFFER_TRIGGER) {
-        // Keep a buffer above the limit to allow for proper sorting in MerlinCard
-        // Sort by count here to remove truly lowest-count species
-        dailySummary = [...dailySummary]
-          .sort((a, b) => b.count - a.count)
-          .slice(0, summaryLimit + SPECIES_LIMIT_BUFFER_TARGET);
-      }
+      // Add to array
+      speciesSummary = [...speciesSummary, newSpecies];
 
       logger.debug(`Added new species: ${detection.commonName} (count: 1)`);
 
       // Clear animation flag after animation completes
       scheduleAnimationCleanup(
         () => {
-          const currentIndex = dailySummary.findIndex(
+          const currentIndex = speciesSummary.findIndex(
             s => s.common_name === detection.commonName
           );
           if (currentIndex >= 0) {
-            const currentItem = safeArrayAccess(dailySummary, currentIndex);
-            if (!currentItem) return;
+            const currentItem = safeArrayAccess(speciesSummary, currentIndex);
+            if (!currentItem) 
+              return;
             const cleared = { ...currentItem };
             cleared.isNew = false;
 
-            dailySummary = [
-              ...dailySummary.slice(0, currentIndex),
+            speciesSummary = [
+              ...speciesSummary.slice(0, currentIndex),
               cleared,
-              ...dailySummary.slice(currentIndex + 1),
+              ...speciesSummary.slice(currentIndex + 1),
             ];
           }
         },
         800,
-        `new-${detection.speciesCode}`
+        `new-${detection.scientificName}`
       );
     }
-  }
-
-
-  // Update freeze state management
-  function handleFreezeStart() {
-    freezeCount++;
-  }
-
-  function handleFreezeEnd() {
-    freezeCount--;
-    // Clamp to prevent negative values due to unmount edge cases
-    freezeCount = Math.max(0, freezeCount);
-
-    // Process pending detections when all interactions are complete
-    if (freezeCount === 0 && pendingDetectionQueue.length > 0) {
-      // Process all pending detections
-      pendingDetectionQueue.forEach(detection => {
-        processDetectionUpdate(detection);
-      });
-
-      // Clear the queue
-      pendingDetectionQueue = [];
-    }
-  }
-
-  // Helper function to process a detection update (extracted from handleNewDetection)
-  function processDetectionUpdate(detection: Detection) {
-
-    // Queue daily summary update with debouncing
-    queueDailySummaryUpdate(detection);
-  }
-
-  // Handle detection click - reserved for future card navigation implementation
-  // eslint-disable-next-line no-unused-vars
-  function _handleDetectionClick(detection: Detection) {
-    // Navigate to detection detail view
-    navigation.navigate(`/ui/detections/${detection.id}`);
   }
 </script>
 
@@ -728,7 +601,7 @@ Performance Optimizations:
 
   <!-- Daily Summary Section -->
   <MerlinCard
-    data={dailySummary}
+    data={speciesSummary}
     loading={isLoadingSummary}
     error={summaryError}
     {showThumbnails}
