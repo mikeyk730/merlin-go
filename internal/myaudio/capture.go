@@ -11,11 +11,15 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+	"os"
+	"path/filepath"
 
 	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/errors"
 	"github.com/tphakala/birdnet-go/internal/logger"
 	"github.com/gen2brain/malgo"
+	
+	tflite "github.com/tphakala/go-tflite"
 )
 
 // AudioDataCallback is a function that can be registered to receive audio data
@@ -657,7 +661,7 @@ func processAudioFrame(
 	// Calculate audio level (use the safe bufferToUse)
 	audioLevelData := calculateAudioLevel(bufferToUse, sourceID, source.Name)
 	
-	spectrogramData, err := calculateSpectrogram(bufferToUse, sourceID, source.Name)
+	spectrogramData, err := calculateSpectrogram(uiSpectrogramInterpreter, bufferToUse, sourceID, source.Name)
 	if err != nil {
 		log.Warn("error generating spectrogram", logger.Error(err))
 		// Potentially non-fatal, log and continue
@@ -741,6 +745,8 @@ func handleDeviceStop(captureDevice *malgo.Device, quitChan, restartChan chan st
 	}
 }
 
+var uiSpectrogramInterpreter *tflite.Interpreter
+
 func captureAudioMalgo(settings *conf.Settings, source captureSource, sourceID string, quitChan, restartChan chan struct{}, unifiedAudioChan chan UnifiedAudioData) {
 
 	log := GetLogger()
@@ -793,7 +799,10 @@ func captureAudioMalgo(settings *conf.Settings, source captureSource, sourceID s
 		}
 	}
 	
-	//todo:mdk register spectrogram processor here
+	uiSpectrogramInterpreter, err = InitializeUiSpectrogramModel(settings.BirdNET.Spectrogram.UiModelPath)
+	if err != nil {
+		log.Error("Failed to initialize UI spectrogram model", logger.Error(err))
+	}
 
 	var captureDevice *malgo.Device
 	var formatType malgo.FormatType // Declare formatType here
@@ -901,17 +910,129 @@ func logDeviceInfo(log logger.Logger, dev *malgo.Device, format malgo.FormatType
 		logger.Int("sample_rate", int(dev.SampleRate())))
 }
 
-func calculateSpectrogram(samples []byte, source, name string) (data UiSpectrogramData, err error) {
+
+
+// getUiSpectrogramModelData returns the appropriate spectrogram model data based on the settings.
+func GetUiSpectrogramModelData(modelPath string) ([]byte, error) {
+	// Check if external model path is specified
+	if modelPath != "" {
+		// Expand environment variables first
+		modelPath = os.ExpandEnv(modelPath)
+
+		// Then expand ~ to home directory if needed
+		if strings.HasPrefix(modelPath, "~/") {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, errors.New(err).
+					Category(errors.CategoryFileIO).
+					Context("path", modelPath).
+					Build()
+			}
+			modelPath = filepath.Join(homeDir, modelPath[2:])
+		}
+
+		// Load model from external file
+		data, err := os.ReadFile(modelPath) //nolint:gosec // G304: modelPath is from application settings
+		if err != nil {
+			return nil, errors.New(err).
+				Category(errors.CategoryFileIO).
+				Context("path", modelPath).
+				Build()
+		}
+
+		GetLogger().Info("Loaded ui spectrogram model", logger.String("path", modelPath))
+		return data, nil
+	}
+
+	return nil, errors.Newf("ui spectrogram model not available: embedded model is nil").
+		Category(errors.CategoryModelLoad).
+		Build()
+}
+
+// initializeUiSpectrogramModel loads and initializes the UI spectrogram model.
+func InitializeUiSpectrogramModel(modelPath string) (*tflite.Interpreter, error) {
+	start := time.Now()
+
+	spectrogramModelData, err := GetUiSpectrogramModelData(modelPath)
+	if err != nil {
+		return nil, err
+	}
+
+	model := tflite.NewModel(spectrogramModelData)
+	if model == nil {
+		return nil, errors.New(fmt.Errorf("cannot load ui spectrogram model from embedded data")).
+			Category(errors.CategoryModelLoad).
+			Context("model_type", "ui-spectrogram").
+			Timing("spectrogram-model-load", time.Since(start)).
+			Build()
+	}
+
+	// Spectrogram model requires only one CPU.
+	options := tflite.NewInterpreterOptions()
+	options.SetNumThread(1)
+	options.SetErrorReporter(func(msg string, user_data any) {
+		GetLogger().Error("TFLite ui spectrogram model error", logger.String("message", msg))
+	}, nil)
+
+	// Create and allocate the TensorFlow Lite interpreter for the spectrogram model.
+	UISpectrogramInterpreter := tflite.NewInterpreter(model, options)
+	if UISpectrogramInterpreter == nil {
+		return nil, errors.New(fmt.Errorf("cannot create ui spectrogram model interpreter")).
+			Category(errors.CategoryModelInit).
+			Context("model_type", "ui-spectrogram").
+			Timing("spectrogram-model-init", time.Since(start)).
+			Build()
+	}
+	if status := UISpectrogramInterpreter.AllocateTensors(); status != tflite.OK {
+		return nil, errors.Newf("tensor allocation failed for ui spectrogram model: %v", status).
+			Category(errors.CategoryModelInit).
+			Context("model_type", "ui-spectrogram").
+			Context("status_code", status).
+			Timing("spectrogram-model-allocate", time.Since(start)).
+			Build()
+	}
+
+	// Force garbage collection to reclaim memory from spectrogram model loading
+	// The model data is no longer needed as TFLite has created its own internal copy
+	runtime.GC()
+
+	return UISpectrogramInterpreter, nil
+}
+
+
+func calculateSpectrogram(interpreter *tflite.Interpreter, samples []byte, source, name string) (data UiSpectrogramData, err error) {
 	if len(samples) != 2048 {
 		return UiSpectrogramData{}, fmt.Errorf("no data provided for spectrogram generation")
 	}
 	
 	size := 257 * 4;
+	
 	spectrogram := make([]byte, size)
 	
-	//todo:mdk run spectrogrm 4 times
-	spectrogram[12] = 255
-	
+	spectrogram1, err := GenerateUiSpectrogram(interpreter, samples[0:512])
+	if err != nil {
+		return UiSpectrogramData{}, err
+	}
+	copy(spectrogram[0:257], spectrogram1)
+
+	spectrogram2, err := GenerateUiSpectrogram(interpreter, samples[512:1024])
+	if err != nil {
+		return UiSpectrogramData{}, err
+	}
+	copy(spectrogram[257:514], spectrogram2)
+
+	spectrogram3, err := GenerateUiSpectrogram(interpreter, samples[1024:1536])
+	if err != nil {
+		return UiSpectrogramData{}, err
+	}
+	copy(spectrogram[514:771], spectrogram3)
+
+	spectrogram4, err := GenerateUiSpectrogram(interpreter, samples[1536:2048])
+	if err != nil {
+		return UiSpectrogramData{}, err
+	}
+	copy(spectrogram[771:1028], spectrogram4)
+
 	spectrogramData := UiSpectrogramData{
 		Spectrogram: spectrogram,
 	}
@@ -919,6 +1040,68 @@ func calculateSpectrogram(samples []byte, source, name string) (data UiSpectrogr
 	return spectrogramData, nil
 }
 
+// GenerateUiSpectrogram generates a spectrogram for the UI.
+// The samples are expected to be 512 samples of 22,050 Hz audio, normalized between -1.0 and 1.0.
+// It returns the spectrogram data as a float32 array with 257 elements.
+func GenerateUiSpectrogram(interpreter *tflite.Interpreter, sample []byte) ([]byte, error) {
+	start := time.Now()
+
+	inputSize := 512
+	outputSize := 257
+	
+	if len(sample) != inputSize {
+		err := errors.New(fmt.Errorf("input sample length %d does not match expected length %d", len(sample), inputSize)).
+			Context("interpreter_state", "initialized").
+			Build()
+		return nil, err
+	}
+
+	inputTensor := interpreter.GetInputTensor(0)
+	if inputTensor == nil {
+		err := errors.New(fmt.Errorf("cannot get spectrogram input tensor")).
+			Category(errors.CategoryModelInit).
+			Context("interpreter_state", "initialized").
+			Build()
+		return nil, err
+	}
+
+	// The spectrogram generator produces a single column of the spectrogram.
+	// The generator expects 512 audio samples normalized between -1.0 and 1.0,
+	// and returns values for the 527 frequency bins.
+
+	currentWindow := inputTensor.Float32s()
+	for j := 0; j < inputSize; j++ {
+		currentWindow[j] = (float32(sample[j]) * 2.0 / 255.0) - 1.0 //todo:mdk efficiency
+	}
+
+	if status := interpreter.Invoke(); status != tflite.OK {
+		err := errors.Newf("spectrogram tensor invoke failed: %v", status).
+			Category(errors.CategoryAudio).
+			Context("status_code", status).
+			Timing("spectrogram-invoke", time.Since(start)).
+			Build()
+		return nil, err
+	}
+
+	outTensor := interpreter.GetOutputTensor(0)
+	if outTensor == nil {
+		return nil, errors.New(fmt.Errorf("spectrogram output tensor nil")).
+			Category(errors.CategoryModelInit).
+			Build()
+	}
+
+	resultSize := outTensor.Dim(0)
+	if resultSize != outputSize {
+		err := errors.Newf("Unexpected output size %d, want %d", resultSize, outputSize).
+			Category(errors.CategoryModelInit).
+			Build()
+		return nil, err
+	}
+	currentColumn := make([]byte, resultSize)
+	outTensor.CopyToBuffer(&currentColumn[0])
+
+	return currentColumn, nil
+}
 
 // calculateAudioLevel calculates the RMS (Root Mean Square) of the audio samples
 // and returns an AudioLevelData struct with the level and clipping status
