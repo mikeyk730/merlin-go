@@ -3,25 +3,10 @@ DashboardPage.svelte - Main dashboard page with bird detection summaries
 
 Purpose:
 - Central dashboard displaying daily species summaries and recent detections
-- Manages date persistence with hybrid URL/localStorage approach
 - Provides real-time updates via Server-Sent Events (SSE)
-- Handles date navigation with smart sticky date selection
 
 Features:
-- Sticky date selection (30-minute retention in localStorage)
-- URL-based date sharing for bookmarking/sharing specific dates
 - Real-time detection updates via SSE with animations
-- Adjacent date preloading for smooth navigation
-- Browser back/forward button support
-- "Today" button resets date persistence to current date
-- Dashboard navigation from sidebar resets to current date
-
-Date Persistence Strategy:
-- Priority: URL parameter > Recent localStorage (within 30 min) > Current date
-- URL parameter allows direct navigation and sharing
-- localStorage provides sticky behavior for return visits
-- Automatic cleanup after 30-minute retention period
-- Reset mechanisms via "Today" button and dashboard navigation
 
 Props: None (Page component)
 
@@ -29,8 +14,6 @@ State Management:
 - speciesSummary: Array of species detection summaries for the selected date
 
 Performance Optimizations:
-- Adjacent date preloading for instant navigation
-- Debounced SSE updates to prevent excessive re-renders
 - Efficient animation cleanup with requestAnimationFrame
 - Map-based lookups for O(1) species updates
 -->
@@ -40,27 +23,11 @@ Performance Optimizations:
   import MerlinCard from '$lib/desktop/features/dashboard/components/MerlinCard.svelte';
   import { t } from '$lib/i18n';
   import type { MerlinSpeciesSummary, ModelPredictions, Prediction } from '$lib/types/detection.types';
-  import {
-    parseHour,
-  } from '$lib/utils/date';
-  import {
-    getInitialDate,
-  } from '$lib/utils/datePersistence';
   import { getLogger } from '$lib/utils/logger';
   import { safeArrayAccess, isPlainObject } from '$lib/utils/security';
   import { api } from '$lib/utils/api';
-  import { navigation } from '$lib/stores/navigation.svelte';
 
   const logger = getLogger('app');
-
-  // Constants
-  const ANIMATION_CLEANUP_DELAY = 2200; // Slightly longer than 2s animation duration
-  const MIN_FETCH_LIMIT = 10; // Minimum number of detections to fetch for SSE processing
-  // Species limit buffer constants for SSE updates
-  // BUFFER_TRIGGER: When array exceeds limit + this, trigger cleanup
-  // BUFFER_TARGET: After cleanup, keep limit + this many species to avoid frequent re-sorting
-  const SPECIES_LIMIT_BUFFER_TRIGGER = 10;
-  const SPECIES_LIMIT_BUFFER_TARGET = 5;
 
   function isModelPredictions(v: unknown): v is ModelPredictions {
     if (!isPlainObject(v)) return false;
@@ -84,15 +51,10 @@ Performance Optimizations:
 
   // State management
   let speciesSummary = $state<MerlinSpeciesSummary[]>([]);
-  let isLoadingSummary = $state(false);
-  let isLoadingDetections = $state(true);
   let summaryError = $state<string | null>(null);
   let detectionsError = $state<string | null>(null);
   let showThumbnails = $state(true); // Default to true for backward compatibility
   let summaryLimit = $state(30); // Default from backend (conf/defaults.go) - species count limit for daily summary
-
-  // SSE throttling timer
-  let sseFetchTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Animation state for new detections
   let newDetectionIds = $state(new Set<number>());
@@ -471,12 +433,6 @@ Performance Optimizations:
         spectrogramEventSource = null;
       }
 
-      // Clean up SSE fetch throttling timer
-      if (sseFetchTimer) {
-        clearTimeout(sseFetchTimer);
-        sseFetchTimer = null;
-      }
-
       // Clean up animation timers
       animationCleanupTimers.forEach(timer => clearTimeout(timer));
       animationCleanupTimers.clear();
@@ -602,7 +558,6 @@ Performance Optimizations:
   <!-- Daily Summary Section -->
   <MerlinCard
     data={speciesSummary}
-    loading={isLoadingSummary}
     error={summaryError}
     {showThumbnails}
     speciesLimit={summaryLimit}

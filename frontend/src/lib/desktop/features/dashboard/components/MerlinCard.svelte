@@ -7,7 +7,6 @@ Purpose:
 - Integrates sun times to highlight sunrise/sunset hours
 
 Features:
-- Progressive loading states (skeleton → spinner → loaded/error)
 - Responsive hourly/bi-hourly/six-hourly column grouping based on viewport
 - Color-coded heatmap cells showing detection intensity
 - Daylight visualization row showing sunrise/sunset times
@@ -58,12 +57,6 @@ Responsive Breakpoints:
 
   const logger = loggers.ui;
 
-  // Progressive loading timing constants (optimized for Svelte 5)
-  const LOADING_PHASES = $state.raw({
-    skeleton: 0, // 0ms - show skeleton immediately to reserve space
-    spinner: 650, // 650ms - show spinner if still loading
-  });
-
   // Heatmap scaling configuration
   // MAX_HEAT_COUNT: detection count at which maximum intensity (9) is reached
   // INTENSITY_LEVELS: number of color intensity levels (1-9, plus 0 for empty)
@@ -89,9 +82,6 @@ Responsive Breakpoints:
     },
     QUERY: {
       DEFAULT_NUM_RESULTS: 25, // Default number of results for detection queries
-    },
-    SKELETON: {
-      SPECIES_COUNT: 8, // Number of skeleton rows to show during loading
     },
     SPECIES_COLUMN: {
       BASE_WIDTH: 4, // rem - thumbnail (2) + gap (0.5) + padding (1) + buffer (0.5)
@@ -124,7 +114,6 @@ Responsive Breakpoints:
 
   interface Props {
     data: MerlinSpeciesSummary[];
-    loading?: boolean;
     error?: string | null;
     showThumbnails?: boolean;
     speciesLimit?: number;
@@ -132,59 +121,10 @@ Responsive Breakpoints:
 
   let {
     data = [],
-    loading = false,
     error = null,
     showThumbnails = true,
     speciesLimit = 0,
   }: Props = $props();
-
-  // Progressive loading state management
-  let loadingPhase = $state<'skeleton' | 'spinner' | 'loaded' | 'error'>('skeleton');
-  let showDelayedIndicator = $state(false);
-
-  // Optimize loading state management with proper dependency tracking
-  $effect(() => {
-    if (loading) {
-      loadingPhase = 'skeleton'; // Show skeleton immediately to reserve space
-      showDelayedIndicator = false;
-
-      // Use untrack to prevent the timer from becoming a reactive dependency
-      const spinnerTimer = setTimeout(() => {
-        if (untrack(() => loading)) {
-          loadingPhase = 'spinner';
-          showDelayedIndicator = true;
-        }
-      }, LOADING_PHASES.spinner);
-
-      return () => {
-        clearTimeout(spinnerTimer);
-      };
-    } else {
-      loadingPhase = error ? 'error' : 'loaded';
-      showDelayedIndicator = false;
-    }
-  });
-
-
-  /**
-   * Calculate heatmap intensity using simple fixed-range scaling.
-   * Maps detection counts evenly across intensity levels 1-9 based on HEATMAP_CONFIG.
-   * - 0 detections → intensity 0 (empty cell)
-   * - 1-6 detections → intensity 1
-   * - 7-12 detections → intensity 2
-   * - ...
-   * - 45-50 detections → intensity 9
-   * - 50+ detections → intensity 9
-   *
-   * @param count - The detection count for this cell
-   * @returns Intensity value from 0-9
-   */
-  const getHeatmapIntensity = (count: number): number => {
-    if (count <= 0) return 0;
-    const { MAX_HEAT_COUNT, INTENSITY_LEVELS } = HEATMAP_CONFIG;
-    const stepSize = MAX_HEAT_COUNT / INTENSITY_LEVELS;
-    return Math.min(INTENSITY_LEVELS, Math.max(1, Math.ceil(count / stepSize)));
-  };
 
   // Static column metadata - use $state.raw() for performance (no deep reactivity needed)
   const staticColumnDefs = $state.raw<ColumnDefinition[]>([
@@ -309,38 +249,10 @@ Responsive Breakpoints:
 
 <!-- Live region for screen reader announcements of loading state changes -->
 <div class="sr-only" role="status" aria-live="polite" aria-atomic="true">
-  {#if loadingPhase === 'skeleton'}
-    {t('dashboard.dailySummary.loading.preparing')}
-  {:else if loadingPhase === 'spinner'}
-    {t('dashboard.dailySummary.loading.fetching')}
-  {:else if loadingPhase === 'error'}
-    {t('dashboard.dailySummary.loading.error')}
-  {:else if loadingPhase === 'loaded'}
     {t('dashboard.dailySummary.loading.complete')}
-  {/if}
 </div>
 
 <!-- Progressive loading implementation -->
-{#if loadingPhase === 'skeleton'}
-  <SkeletonDailySummary {showThumbnails} speciesCount={CONFIG.SKELETON.SPECIES_COUNT} />
-{:else if loadingPhase === 'spinner'}
-  <SkeletonDailySummary
-    {showThumbnails}
-    showSpinner={showDelayedIndicator}
-    speciesCount={CONFIG.SKELETON.SPECIES_COUNT}
-  />
-{:else if loadingPhase === 'error'}
-  <section
-    class="daily-summary-card card col-span-12 bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible"
-  >
-    <div class="p-6">
-      <div class="alert alert-error">
-        <XCircle class="size-6" />
-        <span>{error}</span>
-      </div>
-    </div>
-  </section>
-{:else if loadingPhase === 'loaded'}
   <section
     class="daily-summary-card card col-span-12 bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible"
   >
@@ -392,7 +304,6 @@ Responsive Breakpoints:
       </div>
     </div>
   </section>
-{/if}
 
 <style>
 
@@ -402,7 +313,7 @@ Responsive Breakpoints:
   }
 
   .row-highlight {
-    animation: rowHighlight 3s ease-out forwards;
+    animation: rowHighlight 1.5s ease-out forwards;
   }
   
   /* ========================================================================
