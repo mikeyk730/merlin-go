@@ -283,7 +283,7 @@ Responsive Breakpoints:
                     class="text-lg hover:text-primary cursor-pointer font-medium leading-tight flex items-center gap-1 overflow-hidden"
                     title={item.common_name}
                   >
-                    <span class="truncate flex-1">{item.common_name} {item.count}</span>
+                    <span class="truncate flex-1">{item.common_name} ({item.count})</span>
                   </span>
                 </div>
 

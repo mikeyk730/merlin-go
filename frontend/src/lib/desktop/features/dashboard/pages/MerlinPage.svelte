@@ -523,7 +523,7 @@ Performance Optimizations:
       };
 
       // Add to array
-      speciesSummary = [...speciesSummary, newSpecies];
+      speciesSummary = [newSpecies, ...speciesSummary];
 
       logger.debug(`Added new species: ${detection.commonName} (count: 1)`);
 
