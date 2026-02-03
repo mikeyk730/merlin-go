@@ -57,7 +57,7 @@ Performance Optimizations:
   let summaryLimit = $state(30); // Default from backend (conf/defaults.go) - species count limit for daily summary
 
   // Animation state for new detections
-  let newDetectionIds = $state(new Set<number>());
+  let newDetectionIds = $state(new Set<string>());
 
   async function fetchDashboardConfig() {
     try {
@@ -450,6 +450,7 @@ Performance Optimizations:
 
   // Incremental daily summary update when new detection arrives via SSE
   function handleNewPrediction(data: ModelPredictions) {
+    //todo:mdk newDetections;
     for (var i in data.predictions)
     {
       let p = data.predictions[i];
@@ -475,6 +476,7 @@ Performance Optimizations:
       updated.previousCount = updated.count;
       updated.count++;
       updated.countIncreased = true;
+      updated.isNew = true;
 
       // Update in place
       speciesSummary = [
@@ -498,6 +500,7 @@ Performance Optimizations:
               return;
             const cleared = { ...currentItem };
             cleared.countIncreased = false;
+            cleared.isNew = false;
 
             speciesSummary = [
               ...speciesSummary.slice(0, currentIndex),
@@ -515,7 +518,6 @@ Performance Optimizations:
         common_name: detection.commonName,
         scientific_name: detection.scientificName,
         count: 1,
-        previousCount: 0,
         countIncreased: true,
         isNew: true,
       };
@@ -536,6 +538,7 @@ Performance Optimizations:
             if (!currentItem) 
               return;
             const cleared = { ...currentItem };
+            cleared.countIncreased = false;
             cleared.isNew = false;
 
             speciesSummary = [
@@ -545,7 +548,7 @@ Performance Optimizations:
             ];
           }
         },
-        800,
+        1000,
         `new-${detection.scientificName}`
       );
     }

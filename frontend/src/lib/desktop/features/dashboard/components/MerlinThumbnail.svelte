@@ -158,7 +158,7 @@
 <!-- Trigger thumbnail with popup -->
 <div class="relative flex">
   <!-- Trigger thumbnail -->
-  <a
+  <span
     bind:this={triggerElement}
     class="flex {className} relative"
     onmouseenter={handleMouseEnter}
@@ -178,7 +178,7 @@
       onerror={handleImageError}
       loading="lazy"
     />
-  </a>
+  </span>
 
   <!-- Popup overlay -->
   {#if showPopup}

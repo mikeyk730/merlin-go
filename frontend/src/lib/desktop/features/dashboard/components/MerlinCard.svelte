@@ -269,7 +269,7 @@ Responsive Breakpoints:
               {#key highlightedSpecies.get(item.common_name)}
                 <div
                   class="flex items-center species-row"
-                  class:row-highlight={highlightedSpecies.has(item.common_name)}
+                  class:row-highlight={item.isNew}
                 >
                   <!-- Species info column -->
                   <div class="species-label-col shrink-0 flex items-center gap-2 pr-4">
@@ -279,12 +279,12 @@ Responsive Breakpoints:
                       commonName={item.common_name}
                       scientificName={item.common_name}
                     />
-                  <a
+                  <span
                     class="text-lg hover:text-primary cursor-pointer font-medium leading-tight flex items-center gap-1 overflow-hidden"
                     title={item.common_name}
                   >
                     <span class="truncate flex-1">{item.common_name} {item.count}</span>
-                  </a>
+                  </span>
                 </div>
 
               </div>
