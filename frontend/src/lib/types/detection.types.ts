@@ -148,8 +148,8 @@ export interface MerlinSpeciesSummary {
   common_name: string;
   scientific_name: string;
   count: number;
+  confidence: number;
+  maxConfidence: number;
   // Animation state flags
-  isNew?: boolean; // New species row animation (temporary for SSE updates)
   countIncreased?: boolean; // Count increment animation
-  previousCount?: number; // For animated counter
 }

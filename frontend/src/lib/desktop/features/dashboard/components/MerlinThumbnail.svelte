@@ -170,11 +170,11 @@
     aria-describedby={showPopup ? 'bird-popup' : undefined}
   >
     <!-- Thumbnail placeholder -->
-    <div class="thumbnail-placeholder w-28 h-20 rounded-sm bg-base-200"></div>
+    <div class="thumbnail-placeholder w-18 h-12 rounded-sm bg-base-200"></div>
     <img
       src={thumbnailUrl}
       alt={commonName}
-      class="thumbnail-image w-28 h-20 rounded-sm object-cover cursor-pointer hover:opacity-80 transition-opacity"
+      class="thumbnail-image w-18 h-12 rounded-sm object-cover cursor-pointer hover:opacity-80 transition-opacity"
       onerror={handleImageError}
       loading="lazy"
     />
@@ -238,16 +238,6 @@
                 onerror={handleImageError}
               />
             {/if}
-          </div>
-
-          <!-- Action hint -->
-          <div class="text-center">
-            <p
-              class="text-xs"
-              style:color="color-mix(in srgb, var(--color-base-content) 50%, transparent)"
-            >
-              Click to view detections
-            </p>
           </div>
         </div>
 

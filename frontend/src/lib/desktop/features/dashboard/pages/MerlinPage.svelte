@@ -51,34 +51,9 @@ Performance Optimizations:
 
   // State management
   let speciesSummary = $state<MerlinSpeciesSummary[]>([]);
-  let summaryError = $state<string | null>(null);
-  let detectionsError = $state<string | null>(null);
-  let showThumbnails = $state(true); // Default to true for backward compatibility
-  let summaryLimit = $state(30); // Default from backend (conf/defaults.go) - species count limit for daily summary
 
   // Animation state for new detections
-  let newDetectionIds = $state(new Set<string>());
-
-  async function fetchDashboardConfig() {
-    try {
-      interface DashboardConfig {
-        thumbnails?: { summary?: boolean };
-        summaryLimit?: number;
-      }
-      const config = await api.get<DashboardConfig>('/api/v2/settings/dashboard');
-      // API returns lowercase field names matching Go JSON tags
-      showThumbnails = config.thumbnails?.summary ?? true;
-      summaryLimit = config.summaryLimit ?? 30;
-      logger.debug('Dashboard config loaded:', {
-        thumbnails: config.thumbnails,
-        showThumbnails,
-        summaryLimit,
-      });
-    } catch (error) {
-      logger.error('Error fetching dashboard config:', error);
-      // Keep default values on error
-    }
-  }
+  let newDetectionIds = $state(new Set<string>()); //todo:mdk use this?
 
   // Manual refresh function that works with both SSE and polling
   function handleManualRefresh() {
@@ -370,12 +345,8 @@ Performance Optimizations:
   }
     
   function handleSpectrogramData(bytes: Uint8Array) {
-    //console.log(bytes.length);
-    
     draw(bytes.slice(0, 257));
     draw(bytes.slice(257, 514));
-    //draw(bytes.slice(514, 771));
-    //draw(bytes.slice(771, 1028));
   }
   
   function draw(freqArray: Uint8Array) {
@@ -404,8 +375,6 @@ Performance Optimizations:
     
     // Draw new slice on the right edge
     const col = canvas.width - n;
-    //console.log(freqArray.length)
-    //console.log(freqArray)
     for (let i = 0; i < freqArray.length; i++) {
       const value = 255 - freqArray[i];
       ctx.fillStyle = `rgb(${value}, ${value}, ${value})`;
@@ -414,8 +383,6 @@ Performance Optimizations:
   }
 
   onMount(() => {
-    fetchDashboardConfig();
-
     // Setup SSE connection for real-time updates
     connectToDetectionStream();
     connectToSpectrogramStream();
@@ -449,7 +416,8 @@ Performance Optimizations:
 
   // Incremental daily summary update when new detection arrives via SSE
   function handleNewPrediction(data: ModelPredictions) {
-    //todo:mdk newDetections;
+    newDetectionIds.clear();
+    
     for (var i in data.predictions)
     {
       let p = data.predictions[i];
@@ -457,6 +425,7 @@ Performance Optimizations:
       {
         continue;
       }
+      newDetectionIds.add(p.commonName);
       handleNewDetection(p);
     }
   }
@@ -474,6 +443,8 @@ Performance Optimizations:
       const updated = { ...existing };
       updated.count++;
       updated.countIncreased = true;
+      updated.maxConfidence = Math.max(updated.maxConfidence, detection.confidence)
+      updated.confidence = detection.confidence;
 
       // Update in place
       speciesSummary = [
@@ -513,6 +484,8 @@ Performance Optimizations:
       const newSpecies: MerlinSpeciesSummary = {
         common_name: detection.commonName,
         scientific_name: detection.scientificName,
+        confidence: detection.confidence,
+        maxConfidence: detection.confidence,
         count: 1,
         countIncreased: true,
       };
@@ -549,15 +522,16 @@ Performance Optimizations:
   }
 </script>
 
-<div class="col-span-12">
-  <canvas id="spectrogram" width="800" height="257"></canvas>
-
-  <!-- Daily Summary Section -->
-  <MerlinCard
-    data={speciesSummary}
-    error={summaryError}
-    {showThumbnails}
-    speciesLimit={summaryLimit}
-  />
-
-</div>
+<section
+  class="daily-summary-card card col-span-12 bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible"
+>
+  <div class="p-6 pt-8 ">
+    <div class="overflow-x-auto overflow-y-visible">
+      <canvas id="spectrogram" width="800" height="257" class="mb-4"></canvas>
+      <MerlinCard
+        data={speciesSummary}
+        {newDetectionIds}  
+      />
+    </div>
+  </div>
+</section>

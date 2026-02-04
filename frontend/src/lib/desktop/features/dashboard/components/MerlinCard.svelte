@@ -1,70 +1,21 @@
 <!--
-DailySummaryCard.svelte - Daily bird species detection summary table
+MerlinCard.svelte - Daily bird species detection summary table
 
 Purpose:
 - Displays daily bird species summaries with hourly detection counts
-- Provides interactive heatmap visualization of detection patterns
 - Integrates sun times to highlight sunrise/sunset hours
-
-Features:
-- Responsive hourly/bi-hourly/six-hourly column grouping based on viewport
-- Color-coded heatmap cells showing detection intensity
-- Daylight visualization row showing sunrise/sunset times
-- Species badges with colored initials (GitHub-style heatmap design)
-- Real-time animation for new species and count increases
-- URL memoization with LRU cache for performance optimization
-- Heatmap legend showing intensity scale (Less → More)
-- Clickable cells linking to detailed detection views
 
 Props:
 - data: MerlinSpeciesSummary[] - Array of species detection summaries
-- loading?: boolean - Loading state indicator (default: false)
-- error?: string | null - Error message to display (default: null)
-- showThumbnails?: boolean - Show thumbnails or colored badge placeholders (default: true)
-
-Performance Optimizations:
-- $state.raw() for static data structures (caches, render functions)
-- $derived.by() for complex reactive calculations
-- LRU cache for URL memoization (500 entries max)
-- Optimized animation cleanup with requestAnimationFrame
-- Efficient data sorting and max count calculations
 -->
 
 <script lang="ts">
-  import { t } from '$lib/i18n';
   import type { MerlinSpeciesSummary } from '$lib/types/detection.types';
-  import { loggers } from '$lib/utils/logger';
   import { safeArrayAccess, safeGet } from '$lib/utils/security';
   import MerlinThumbnail from './MerlinThumbnail.svelte';
 
-  const logger = loggers.ui;
-
-  // Heatmap scaling configuration
-  // MAX_HEAT_COUNT: detection count at which maximum intensity (9) is reached
-  // INTENSITY_LEVELS: number of color intensity levels (1-9, plus 0 for empty)
-  const HEATMAP_CONFIG = {
-    MAX_HEAT_COUNT: 50,
-    INTENSITY_LEVELS: 9,
-  } as const;
-
   // Consolidated configuration for magic numbers
   const CONFIG = {
-    CACHE: {
-      SUN_TIMES_MAX_ENTRIES: 30, // Max days of sun times to cache
-      URL_MAX_ENTRIES: 500, // Max URLs to cache for memoization
-    },
-    DAYLIGHT: {
-      DAWN_DUSK_HOURS_OFFSET: 2, // Hours before sunrise / after sunset for pre-dawn/dusk
-      MIDDAY_INTENSITY_THRESHOLD: 0.3, // Distance from midday for "mid-day" classification
-      DAY_INTENSITY_THRESHOLD: 0.7, // Distance from midday for "day" classification
-      DEEP_NIGHT_END: 4, // Hour when deep night ends (0-4)
-      DEEP_NIGHT_START: 21, // Hour when deep night starts (21-23)
-      NIGHT_MORNING: 5, // Morning twilight hour
-      NIGHT_EVENING: 20, // Evening twilight hour
-    },
-    QUERY: {
-      DEFAULT_NUM_RESULTS: 25, // Default number of results for detection queries
-    },
     SPECIES_COLUMN: {
       BASE_WIDTH: 4, // rem - thumbnail (2) + gap (0.5) + padding (1) + buffer (0.5)
       CHAR_WIDTH: 0.52, // rem per character for text-sm font
@@ -75,16 +26,12 @@ Performance Optimizations:
 
   interface Props {
     data: MerlinSpeciesSummary[];
-    error?: string | null;
-    showThumbnails?: boolean;
-    speciesLimit?: number;
+    newDetectionIds?: Set<string>;
   }
 
   let {
     data = [],
-    error = null,
-    showThumbnails = true,
-    speciesLimit = 0,
+    newDetectionIds = new Set(),
   }: Props = $props();
 
 
@@ -151,21 +98,9 @@ Performance Optimizations:
   });
 </script>
 
-
-<!-- Live region for screen reader announcements of loading state changes -->
-<div class="sr-only" role="status" aria-live="polite" aria-atomic="true">
-    {t('dashboard.dailySummary.loading.complete')}
-</div>
-
-<!-- Progressive loading implementation -->
-  <section
-    class="daily-summary-card card col-span-12 bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible"
-  >
     <!-- Grid Content -->
-    <div class="p-6 pt-8">
-      <div class="overflow-x-auto overflow-y-visible">
         <div
-          class="daily-summary-grid min-w-[900px]"
+          class="merlin-results-grid max-w-[800px]"
           style:--species-col-width={speciesColumnWidth}
         >
           <!-- Species rows -->
@@ -173,11 +108,11 @@ Performance Optimizations:
             {#each data as item (item.common_name)}
               {#key highlightedSpecies.get(item.common_name)}
                 <div
-                  class="flex items-center species-row"
+                  class="flex items-center species-row mb-1"
                   class:row-highlight={item.countIncreased}
                 >
                   <!-- Species info column -->
-                  <div class="species-label-col shrink-0 flex items-center gap-2 pr-4">
+                  <div class="species-label-col shrink-0 flex items-center gap-4 pr-4">
                     <MerlinThumbnail
                       thumbnailUrl={
                         `/api/v2/media/species-image?name=${encodeURIComponent(item.scientific_name)}`}
@@ -185,11 +120,17 @@ Performance Optimizations:
                       scientificName={item.common_name}
                     />
                   <span
-                    class="text-lg hover:text-primary cursor-pointer font-medium leading-tight flex items-center gap-1 overflow-hidden"
+                    class="text-md font-medium leading-tight flex items-center gap-1 overflow-hidden"
                     title={item.common_name}
                   >
-                    <span class="truncate flex-1">{item.common_name} ({item.count})</span>
+                    <span class="truncate flex-1">{item.common_name}</span>
                   </span>
+                  <span
+                    class="ml-auto text-md font-medium leading-tight flex items-center gap-1 overflow-hidden"
+                    title={item.common_name}
+                  >
+                    <span class="truncate flex-1">{Math.floor(item.confidence*100)}%</span>
+                  </span>                  
                 </div>
 
               </div>
@@ -206,9 +147,6 @@ Performance Optimizations:
             Listening for birds...
           </div>
         {/if}
-      </div>
-    </div>
-  </section>
 
 <style>
 
@@ -225,9 +163,7 @@ Performance Optimizations:
      CSS Custom Properties for Daily Summary Grid
      Scoped to component to avoid global conflicts
      ======================================================================== */
-  .daily-summary-card {
-    /* todo:mdk Grid layout properties */
-    --grid-cell-height: 3.0rem;
+  .merlin-results-grid {
     --grid-cell-radius: 4px;
     --grid-gap: 4px; /* Gap between grid cells */
 
@@ -235,11 +171,6 @@ Performance Optimizations:
        These are fallbacks only - the dynamic width is set via style:--species-col-width */
     --species-col-min-width: 9rem; /* Fallback, matches CONFIG.SPECIES_COLUMN.MIN_WIDTH */
     --species-col-max-width: 16rem; /* Fallback, matches CONFIG.SPECIES_COLUMN.MAX_WIDTH */
-
-    /* Animation durations */
-    --anim-count-pop: 600ms;
-    --anim-heart-pulse: 1000ms;
-    --anim-new-species: 800ms;
   }
 
   /* ========================================================================
@@ -253,27 +184,11 @@ Performance Optimizations:
 
   /* Species row - consistent height */
   .species-row {
-    min-height: 5rem;
     border-radius: var(--grid-cell-radius);
-    transition: background-color 0.15s ease;
   }
 
   .species-row:hover {
     background-color: var(--hover-overlay);
-  }
-
-  /* Empty cells background */
-  :global(.heatmap-color-0) {
-    background-color: var(--color-base-300);
-    border-radius: var(--grid-cell-radius);
-  }
-
-  :global([data-theme='light'] .heatmap-color-0) {
-    background-color: #e2e8f0;
-  }
-
-  :global([data-theme='dark'] .heatmap-color-0) {
-    background-color: #1e293b;
   }
 
   /* ========================================================================
