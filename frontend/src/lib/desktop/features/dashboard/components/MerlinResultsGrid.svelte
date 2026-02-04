@@ -1,5 +1,5 @@
 <!--
-MerlinCard.svelte - Daily bird species detection summary table
+MerlinResultsGrid.svelte - Daily bird species detection summary table
 
 Purpose:
 - Displays daily bird species summaries with hourly detection counts
@@ -100,7 +100,7 @@ Props:
 
     <!-- Grid Content -->
         <div
-          class="merlin-results-grid max-w-[800px]"
+          class="merlin-results-grid mb-4 max-w-[800px]"
           style:--species-col-width={speciesColumnWidth}
         >
           <!-- Species rows -->
@@ -108,11 +108,11 @@ Props:
             {#each data as item (item.common_name)}
               {#key highlightedSpecies.get(item.common_name)}
                 <div
-                  class="flex items-center species-row mb-1"
+                  class="flex items-center species-row"
                   class:row-highlight={item.countIncreased}
                 >
                   <!-- Species info column -->
-                  <div class="species-label-col shrink-0 flex items-center gap-4 pr-4">
+                  <div class="species-label-col shrink-0 flex items-center gap-4 px-4 py-1">
                     <MerlinThumbnail
                       thumbnailUrl={
                         `/api/v2/media/species-image?name=${encodeURIComponent(item.scientific_name)}`}
@@ -141,7 +141,7 @@ Props:
 
         {#if data.length === 0}
           <div
-            class="text-center py-8"
+            class="text-center py-8 max-w-[800px]"
             style:color="color-mix(in srgb, var(--color-base-content) 60%, transparent)"
           >
             Listening for birds...
@@ -165,7 +165,7 @@ Props:
      ======================================================================== */
   .merlin-results-grid {
     --grid-cell-radius: 4px;
-    --grid-gap: 4px; /* Gap between grid cells */
+    --grid-gap: 1px; /* Gap between grid cells */
 
     /* Species column width fallbacks (actual width is set dynamically via JS)
        These are fallbacks only - the dynamic width is set via style:--species-col-width */

@@ -1,5 +1,5 @@
 <!--
-DashboardPage.svelte - Main dashboard page with bird detection summaries
+MerlinPage.svelte - Main dashboard page with bird detection summaries
 
 Purpose:
 - Central dashboard displaying daily species summaries and recent detections
@@ -20,7 +20,7 @@ Performance Optimizations:
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import ReconnectingEventSource from 'reconnecting-eventsource';
-  import MerlinCard from '$lib/desktop/features/dashboard/components/MerlinCard.svelte';
+  import MerlinResultsGrid from '$lib/desktop/features/dashboard/components/MerlinResultsGrid.svelte';
   import { t } from '$lib/i18n';
   import type { MerlinSpeciesSummary, ModelPredictions, Prediction } from '$lib/types/detection.types';
   import { getLogger } from '$lib/utils/logger';
@@ -522,13 +522,11 @@ Performance Optimizations:
   }
 </script>
 
-<section
-  class="daily-summary-card card col-span-12 bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible"
->
-  <div class="p-6 pt-8 ">
-    <div class="overflow-x-auto overflow-y-visible">
+<section class="col-span-12">
+  <div class="pt-8 card bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible inline-block">
+    <div class="overflow-x-auto overflow-y-visible inline-block">
       <canvas id="spectrogram" width="800" height="257" class="mb-4"></canvas>
-      <MerlinCard
+      <MerlinResultsGrid
         data={speciesSummary}
         {newDetectionIds}  
       />
