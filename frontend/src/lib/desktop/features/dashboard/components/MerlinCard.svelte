@@ -28,31 +28,13 @@ Performance Optimizations:
 - LRU cache for URL memoization (500 entries max)
 - Optimized animation cleanup with requestAnimationFrame
 - Efficient data sorting and max count calculations
-
-Responsive Breakpoints:
-- Desktop (≥1400px): All hourly columns visible
-- Large (1200-1399px): All hourly columns visible
-- Medium (1024-1199px): All hourly columns visible
-- Tablet (768-1023px): Bi-hourly columns only
-- Mobile (480-767px): Bi-hourly columns only
-- Small (<480px): Six-hourly columns only
 -->
 
 <script lang="ts">
-  import SkeletonDailySummary from '$lib/desktop/components/ui/SkeletonDailySummary.svelte';
   import { t } from '$lib/i18n';
   import type { MerlinSpeciesSummary } from '$lib/types/detection.types';
   import { loggers } from '$lib/utils/logger';
-  import { LRUCache } from '$lib/utils/LRUCache';
   import { safeArrayAccess, safeGet } from '$lib/utils/security';
-  import {
-    convertTemperature,
-    getTemperatureSymbol,
-    type TemperatureUnit,
-  } from '$lib/utils/formatters';
-  import { ChevronLeft, ChevronRight, Star, Sunrise, Sunset, XCircle } from '@lucide/svelte';
-  import { untrack } from 'svelte';
-  import AnimatedCounter from './AnimatedCounter.svelte';
   import MerlinThumbnail from './MerlinThumbnail.svelte';
 
   const logger = loggers.ui;
@@ -91,27 +73,6 @@ Responsive Breakpoints:
     },
   } as const;
 
-  // Column type definitions
-  interface BaseColumn {
-    key: string;
-    header?: string;
-    className?: string;
-    align?: string;
-  }
-
-  interface SpeciesColumn extends BaseColumn {
-    type: 'species';
-    sortable: boolean;
-  }
-
-  interface HourlyColumn extends BaseColumn {
-    type: 'hourly';
-    hour: number;
-    align: string;
-  }
-
-  type ColumnDefinition = SpeciesColumn | HourlyColumn;
-
   interface Props {
     data: MerlinSpeciesSummary[];
     error?: string | null;
@@ -126,62 +87,6 @@ Responsive Breakpoints:
     speciesLimit = 0,
   }: Props = $props();
 
-  // Static column metadata - use $state.raw() for performance (no deep reactivity needed)
-  const staticColumnDefs = $state.raw<ColumnDefinition[]>([
-    {
-      key: 'common_name',
-      type: 'species' as const,
-      sortable: true,
-      className: 'font-medium whitespace-nowrap species-column',
-    },
-    // Progress bar column removed to save horizontal space - see mockup design
-    ...Array.from({ length: 24 }, (_, hour) => ({
-      key: `hour_${hour}`,
-      type: 'hourly' as const,
-      hour,
-      header: hour.toString().padStart(2, '0'),
-      align: 'center',
-      className: 'hour-data hourly-count px-0',
-    }))
-  ]);
-
-  // Reactive columns with only dynamic headers - use $derived.by for complex logic
-  const columns = $derived.by((): ColumnDefinition[] => {
-    // Early return for empty data to prevent unnecessary calculations
-    if (staticColumnDefs.length === 0) return [];
-
-    return staticColumnDefs.map(colDef => ({
-      ...colDef,
-      header:
-        colDef.type === 'species' ? t('dashboard.dailySummary.columns.species') : colDef.header,
-    }));
-  });
-
-  // Track and log unexpected column types once (performance optimization)
-  const loggedUnexpectedColumns = new Set<string>();
-  $effect(() => {
-    if (import.meta.env.DEV) {
-      const expectedTypes = new Set(['species', 'hourly']);
-
-      columns.forEach(column => {
-        if (!expectedTypes.has(column.type) && !loggedUnexpectedColumns.has(column.key)) {
-          logger.warn('Unexpected column type detected', null, {
-            columnKey: column.key,
-            columnType: column.type,
-            component: 'DailySummaryCard',
-            action: 'columnValidation',
-          });
-          loggedUnexpectedColumns.add(column.key);
-        }
-      });
-    }
-  });
-
-  // Pre-computed render functions - use $state.raw for performance (static functions)
-  const renderFunctions = $state.raw({
-    hourly: (item: MerlinSpeciesSummary, hour: number) =>
-      item.count
-  });
 
   // Calculate dynamic species column width based on longest name
   // This ensures all rows align properly regardless of name length
@@ -308,12 +213,12 @@ Responsive Breakpoints:
 <style>
 
   @keyframes rowHighlight {
-    0% { background-color: #f8f07b; }
+    0% { background-color: #fff5c2; }
     100% { background-color: transparent; }
   }
 
   .row-highlight {
-    animation: rowHighlight 1.5s ease-out forwards;
+    animation: rowHighlight 1.75s ease-out forwards;
   }
   
   /* ========================================================================

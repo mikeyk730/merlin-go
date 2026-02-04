@@ -549,7 +549,7 @@ Performance Optimizations:
           }
         },
         1000,
-        `new-${detection.scientificName}`
+        `count-${detection.scientificName}`
       );
     }
   }
