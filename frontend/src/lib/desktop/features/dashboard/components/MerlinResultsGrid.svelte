@@ -26,11 +26,13 @@ Props:
 
   interface Props {
     data: MerlinSpeciesSummary[];
+    hasBirdSinging: boolean;
     newDetectionIds?: Set<string>;
   }
 
   let {
     data = [],
+    hasBirdSinging = false,
     newDetectionIds = new Set(),
   }: Props = $props();
 
@@ -102,6 +104,7 @@ Props:
         <div
           class="merlin-results-grid mb-4 max-w-[800px]"
           style:--species-col-width={speciesColumnWidth}
+          class:bird-singing={hasBirdSinging}
         >
           <!-- Species rows -->
           <div class="flex flex-col" style:gap="var(--grid-gap)">

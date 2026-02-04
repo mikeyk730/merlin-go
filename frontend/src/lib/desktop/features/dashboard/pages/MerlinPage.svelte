@@ -51,6 +51,7 @@ Performance Optimizations:
 
   // State management
   let speciesSummary = $state<MerlinSpeciesSummary[]>([]);
+  let hasBirdSinging = $state(false);
 
   // Animation state for new detections
   let newDetectionIds = $state(new Set<string>()); //todo:mdk use this?
@@ -269,7 +270,7 @@ Performance Optimizations:
       };
 
       spectrogramEventSource.onmessage = event => {
-        console.log('foo')
+        console.log('foo') //todo:mdk ever called?
         try {
           const data = JSON.parse(event.data);
 
@@ -418,12 +419,13 @@ Performance Optimizations:
   function handleNewPrediction(data: ModelPredictions) {
     newDetectionIds.clear();
     
+    hasBirdSinging = false;
     let recs = filterAndSortResults(data.predictions);
-    for (let i in recs)
+    for (const rec of recs)
     {
-      let rec = recs[i];
-      if (rec.commonName == "bird sp.")
+      if (rec.commonName == SINGING_BIRD_NAME)
       {
+        hasBirdSinging = true;
         continue;
       }
       newDetectionIds.add(rec.commonName);
@@ -443,7 +445,8 @@ Performance Optimizations:
   
   function getInitialThreshold()
   {
-    return 0.7; // dev value == 0.5
+    //return 0.5; // dev value?
+    return 0.7; // old value?
   }
   
   function getUnlockedBirdThreshold()
@@ -461,55 +464,82 @@ Performance Optimizations:
   // ClassificationResultsProcessorImpl
   //
   
-  let unlockedSpecies = new Set<string>();
+  let SINGING_BIRD_NAME = "bird sp."
+  let unlockedSpecies = new Set<string>([SINGING_BIRD_NAME]);
+  let previousDetections = new Array<SoundRecognition>();
  
   function filterAndSortResults(recs: SoundRecognition[])
   {
-    let filtered = filterByThreshold(recs);
-    if (!containsBirdSinging(filtered))
+    let filteredResults = filterByThreshold(recs);
+    if (!containsBirdSinging(filteredResults))
     {
       return new Array<SoundRecognition>();
     }
     
-    updateHistory(filtered);
-    updateUnlockedSpecies(filtered);
+    let history = updateHistory(filteredResults);
+    updateUnlockedSpecies(filteredResults, history);
     
     let results = new Array<SoundRecognition>();
     
-    for (let i in filtered)
+    for (const rec of filteredResults)
     {
-      let rec = filtered[i];
-      //todo:mdk if (isUnlocked(rec))
+      if (isUnlocked(rec))
       {
         results.push(rec);
       }
     }
     
-    //todo:mdk sort by confidence
+    results.sort(function(a, b) { 
+      return a.confidence - b.confidence;
+    });
+    
     return results;
   }
   
-  function updateUnlockedSpecies(recs: SoundRecognition[])
+  function updateUnlockedSpecies(recs: SoundRecognition[], history: Map<string, number>)
   {
-    //todo:mdk implement
+    for (const rec of recs)
+    {
+      if (!isUnlocked(rec))
+      {
+        unlock(rec.commonName, history)
+      }
+    }
   }
  
-  function unlock(commonName: string, consecutiveDetections: string[])
+  function unlock(commonName: string, history: Map<string, number>)
   {
-    //todo:mdk implement
+    const count = history.get(commonName) || 0;
+    if (count >= getMinDetectionsToUnlock()) {
+      unlockedSpecies.add(commonName);
+    }
   }
   
   function updateHistory(recs: SoundRecognition[])
   {
-    //todo:mdk implement
+    let detectionHistory = new Map<string, number>();
+    
+    for (const rec of previousDetections) {
+      let name = rec.commonName;
+      const currentCount = detectionHistory.get(name) || 0;
+      detectionHistory.set(name, currentCount + 1);
+    }
+    for (const rec of recs) {
+      let name = rec.commonName;
+      const currentCount = detectionHistory.get(name) || 0;
+      detectionHistory.set(name, currentCount + 1);
+    }
+    
+    previousDetections = recs;
+    
+    return detectionHistory;
   }
   
   function containsBirdSinging(recs: SoundRecognition[])
   {
-    for (let i in recs)
+    for (const rec of recs)
     {
-      let rec = recs[i];
-      if (rec.commonName == "bird sp.")
+      if (rec.commonName == SINGING_BIRD_NAME)
       {
         return true;
       }
@@ -522,9 +552,8 @@ Performance Optimizations:
   {
     let results = new Array<SoundRecognition>();
     
-    for (let i in recs)
+    for (const rec of recs)
     {
-      let rec = recs[i];
       if (rec.confidence >= getMinConfidence(rec))
       {
         results.push(rec);
@@ -536,7 +565,7 @@ Performance Optimizations:
   
   function getMinConfidence(rec: SoundRecognition)
   {
-      if (rec.commonName == "bird sp.") {
+      if (rec.commonName == SINGING_BIRD_NAME) {
         return getBirdSingingThreshold();
       }
       
@@ -651,6 +680,7 @@ Performance Optimizations:
       <canvas id="spectrogram" width="800" height="257" class="mb-4"></canvas>
       <MerlinResultsGrid
         data={speciesSummary}
+        {hasBirdSinging}  
         {newDetectionIds}  
       />
     </div>
