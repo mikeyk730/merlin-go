@@ -22,7 +22,7 @@ Performance Optimizations:
   import ReconnectingEventSource from 'reconnecting-eventsource';
   import MerlinResultsGrid from '$lib/desktop/features/dashboard/components/MerlinResultsGrid.svelte';
   import { t } from '$lib/i18n';
-  import type { MerlinSpeciesSummary, ModelPredictions, Prediction } from '$lib/types/detection.types';
+  import type { MerlinSpeciesSummary, ModelPredictions, SoundRecognition } from '$lib/types/detection.types';
   import { getLogger } from '$lib/utils/logger';
   import { safeArrayAccess, isPlainObject } from '$lib/utils/security';
   import { api } from '$lib/utils/api';
@@ -418,20 +418,143 @@ Performance Optimizations:
   function handleNewPrediction(data: ModelPredictions) {
     newDetectionIds.clear();
     
-    for (var i in data.predictions)
+    let recs = filterAndSortResults(data.predictions);
+    for (let i in recs)
     {
-      let p = data.predictions[i];
-      if (p.commonName == "bird sp.")
+      let rec = recs[i];
+      if (rec.commonName == "bird sp.")
       {
         continue;
       }
-      newDetectionIds.add(p.commonName);
-      handleNewDetection(p);
+      newDetectionIds.add(rec.commonName);
+      handleNewDetection(rec);
     }
   }
+  
+  
+  //
+  // ThresholdPrefs
+  //
+  
+  function getBirdSingingThreshold()
+  {
+    return 0.96
+  }
+  
+  function getInitialThreshold()
+  {
+    return 0.7; // dev value == 0.5
+  }
+  
+  function getUnlockedBirdThreshold()
+  {
+    return 0.2;
+  }
+  
+  function getMinDetectionsToUnlock()
+  {
+    return 2;
+  }
+  
+  
+  //
+  // ClassificationResultsProcessorImpl
+  //
+  
+  let unlockedSpecies = new Set<string>();
+ 
+  function filterAndSortResults(recs: SoundRecognition[])
+  {
+    let filtered = filterByThreshold(recs);
+    if (!containsBirdSinging(filtered))
+    {
+      return new Array<SoundRecognition>();
+    }
+    
+    updateHistory(filtered);
+    updateUnlockedSpecies(filtered);
+    
+    let results = new Array<SoundRecognition>();
+    
+    for (let i in filtered)
+    {
+      let rec = filtered[i];
+      //todo:mdk if (isUnlocked(rec))
+      {
+        results.push(rec);
+      }
+    }
+    
+    //todo:mdk sort by confidence
+    return results;
+  }
+  
+  function updateUnlockedSpecies(recs: SoundRecognition[])
+  {
+    //todo:mdk implement
+  }
+ 
+  function unlock(commonName: string, consecutiveDetections: string[])
+  {
+    //todo:mdk implement
+  }
+  
+  function updateHistory(recs: SoundRecognition[])
+  {
+    //todo:mdk implement
+  }
+  
+  function containsBirdSinging(recs: SoundRecognition[])
+  {
+    for (let i in recs)
+    {
+      let rec = recs[i];
+      if (rec.commonName == "bird sp.")
+      {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  function filterByThreshold(recs: SoundRecognition[])
+  {
+    let results = new Array<SoundRecognition>();
+    
+    for (let i in recs)
+    {
+      let rec = recs[i];
+      if (rec.confidence >= getMinConfidence(rec))
+      {
+        results.push(rec);
+      }
+    }
+    
+    return results;
+  }
+  
+  function getMinConfidence(rec: SoundRecognition)
+  {
+      if (rec.commonName == "bird sp.") {
+        return getBirdSingingThreshold();
+      }
+      
+      if (isUnlocked(rec)) {
+        return getUnlockedBirdThreshold();
+      }
+      
+      return getInitialThreshold();
+  }
+
+  function isUnlocked(rec: SoundRecognition)
+  {
+    return unlockedSpecies.has(rec.commonName);
+  }
+
 
   // Incremental daily summary update when new detection arrives via SSE
-  function handleNewDetection(detection: Prediction) {
+  function handleNewDetection(detection: SoundRecognition) {
 
     const existingIndex = speciesSummary.findIndex(s => s.common_name === detection.commonName);
 

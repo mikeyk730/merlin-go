@@ -33,14 +33,14 @@ export interface Detection {
   currentSeason?: string; // Current season name
 }
 
-export interface Prediction {
+export interface SoundRecognition {
   commonName: string;
   scientificName: string;
   confidence: number;
 };
 
 export interface ModelPredictions {
-  predictions: Prediction[];
+  predictions: SoundRecognition[];
   datetime: string; // YYYY-MM-DD
 };
 
