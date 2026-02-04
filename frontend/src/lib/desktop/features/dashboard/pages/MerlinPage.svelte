@@ -95,7 +95,6 @@ Performance Optimizations:
   function clearDailySummaryAnimations() {
     speciesSummary = speciesSummary.map(species => ({
       ...species,
-      isNew: false,
       countIncreased: false,
     }));
 
@@ -473,10 +472,8 @@ Performance Optimizations:
       if (!existing) 
         return;
       const updated = { ...existing };
-      updated.previousCount = updated.count;
       updated.count++;
       updated.countIncreased = true;
-      updated.isNew = true;
 
       // Update in place
       speciesSummary = [
@@ -500,7 +497,6 @@ Performance Optimizations:
               return;
             const cleared = { ...currentItem };
             cleared.countIncreased = false;
-            cleared.isNew = false;
 
             speciesSummary = [
               ...speciesSummary.slice(0, currentIndex),
@@ -519,7 +515,6 @@ Performance Optimizations:
         scientific_name: detection.scientificName,
         count: 1,
         countIncreased: true,
-        isNew: true,
       };
 
       // Add to array
@@ -539,7 +534,6 @@ Performance Optimizations:
               return;
             const cleared = { ...currentItem };
             cleared.countIncreased = false;
-            cleared.isNew = false;
 
             speciesSummary = [
               ...speciesSummary.slice(0, currentIndex),

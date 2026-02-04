@@ -174,7 +174,7 @@ Performance Optimizations:
               {#key highlightedSpecies.get(item.common_name)}
                 <div
                   class="flex items-center species-row"
-                  class:row-highlight={item.isNew}
+                  class:row-highlight={item.countIncreased}
                 >
                   <!-- Species info column -->
                   <div class="species-label-col shrink-0 flex items-center gap-2 pr-4">
