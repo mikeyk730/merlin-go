@@ -1005,7 +1005,7 @@ func calculateSpectrogram(interpreter *tflite.Interpreter, samples []byte, sourc
 		return UiSpectrogramData{}, fmt.Errorf("no data provided for spectrogram generation")
 	}
 	
-	input := convert16BitToFloat32x(samples) // 1024 samples
+	input := convert16BitToFloat32(samples) // 1024 samples
 	size := 257 * 2;
 	
 	spectrogram := make([]byte, size)
@@ -1027,30 +1027,6 @@ func calculateSpectrogram(interpreter *tflite.Interpreter, samples []byte, sourc
 	}
 	
 	return spectrogramData, nil
-}
-
-
-// convert16BitToFloat32 converts 16-bit sample to float32 values.
-func convert16BitToFloat32x(sample []byte) []float32 {
-	length := len(sample) / 2
-
-	// Try to get buffer from pool if available
-	var float32Data []float32
-	if float32Pool != nil && length == Float32BufferSize {
-		float32Data = float32Pool.Get()
-	} else {
-		// Fallback to allocation for non-standard sizes or if pool not initialized
-		float32Data = make([]float32, length)
-	}
-
-	divisor := float32(32768.0)
-
-	for i := range length {
-		sample := int16(sample[i*2]) | int16(sample[i*2+1])<<8
-		float32Data[i] = float32(sample) / divisor
-	}
-
-	return float32Data
 }
 
 

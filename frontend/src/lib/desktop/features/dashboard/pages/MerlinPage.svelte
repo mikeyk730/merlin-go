@@ -184,38 +184,6 @@ Performance Optimizations:
         logger.debug('SSE connection opened');
       };
 
-      eventSource.onmessage = event => {
-        try {
-          const data = JSON.parse(event.data);
-
-          // Check if this is a structured message with eventType
-          if (data.eventType) {
-            switch (data.eventType) {
-              case 'connected':
-                logger.debug('Connected to detection stream:', data);
-                break;
-
-              case 'detection':
-                handleSSEDetection(data);
-                break;
-
-              case 'heartbeat':
-                logger.debug('SSE heartbeat received, clients:', data.clients);
-                break;
-
-              default:
-                logger.debug('Unknown event type:', data.eventType);
-            }
-          } else if (data.ID && data.CommonName) {
-            // This looks like a direct detection event
-            handleSSEDetection(data);
-          }
-        } catch (error) {
-          logger.error('Failed to parse SSE message:', error);
-        }
-      };
-
-      // Handle specific event types
       // Handle specific event types
       eventSource.addEventListener('connected', (event: Event) => {
         try {
@@ -302,36 +270,6 @@ Performance Optimizations:
         logger.debug('SSE connection opened for spectrogram');
       };
 
-      spectrogramEventSource.onmessage = event => {
-        console.log('foo') //todo:mdk ever called?
-        try {
-          const data = JSON.parse(event.data);
-
-          // Check if this is a structured message with eventType
-          if (data.eventType) {
-            switch (data.eventType) {
-              case 'connected':
-                logger.debug('Connected to detection stream:', data);
-                break;
-
-              case 'ui_spectrogram':
-                console.log(data); //todo:mdk
-                break;
-
-              case 'heartbeat':
-                logger.debug('SSE heartbeat received, clients:', data.clients);
-                break;
-
-              default:
-                logger.debug('Unknown event type:', data.eventType);
-            }
-          }
-        } catch (error) {
-          logger.error('Failed to parse SSE message:', error);
-        }
-      };
-
-      // Handle specific event types
       // Handle specific event types
       spectrogramEventSource.addEventListener('connected', (event: Event) => {
         try {
