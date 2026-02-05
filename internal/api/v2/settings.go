@@ -723,6 +723,8 @@ func getSettingsSectionValue(settings *conf.Settings, section string) (any, erro
 		return getAudioSectionValue(settings), nil
 	case "dashboard":
 		return &settings.Realtime.Dashboard, nil
+	case "soundid":
+		return &settings.SoundId, nil
 	case "weather":
 		return &settings.Realtime.Weather, nil
 	case "mqtt":

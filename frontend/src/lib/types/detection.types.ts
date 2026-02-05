@@ -44,6 +44,12 @@ export interface ModelPredictions {
   datetime: string; // YYYY-MM-DD
 };
 
+export interface SoundIdConfig {
+  birdsingingthreshold: number;
+  initialthreshold: number;
+  unlockedthreshold: number;
+  mindetectionstounlock: number;
+};
 
 export interface PaginatedDetectionResponse {
   data: Detection[];

@@ -1,6 +1,5 @@
 <!--
 mdk:todo:
--add sound id thresholds to config
 -add bird is singing indicator
 -backend needs to use different thresholds for sound id events
 -turn off spectrogram events when not on sound id page
@@ -34,7 +33,7 @@ Performance Optimizations:
   import ReconnectingEventSource from 'reconnecting-eventsource';
   import MerlinResultsGrid from '$lib/desktop/features/dashboard/components/MerlinResultsGrid.svelte';
   import { t } from '$lib/i18n';
-  import type { MerlinSpeciesSummary, ModelPredictions, SoundRecognition } from '$lib/types/detection.types';
+  import type { MerlinSpeciesSummary, ModelPredictions, SoundRecognition, SoundIdConfig } from '$lib/types/detection.types';
   import { getLogger } from '$lib/utils/logger';
   import { safeArrayAccess, isPlainObject } from '$lib/utils/security';
   import { api } from '$lib/utils/api';
@@ -68,6 +67,28 @@ Performance Optimizations:
   // Animation state for new detections
   let newDetectionIds = $state(new Set<string>()); //todo:mdk use this?
 
+  let thresholdPrefs : SoundIdConfig = {
+    birdsingingthreshold: 1.0,
+    initialthreshold: 1.0,
+    unlockedthreshold: 1.0,
+    mindetectionstounlock: 1000,
+  };
+
+  async function fetchSoundIdConfig() {
+    try {
+      thresholdPrefs = await api.get<SoundIdConfig>('/api/v2/settings/soundid');
+      logger.debug('Soundid config loaded:', {
+        birdsingingthreshold: thresholdPrefs.birdsingingthreshold,
+        initialthreshold: thresholdPrefs.initialthreshold,
+        unlockedthreshold: thresholdPrefs.unlockedthreshold,
+        mindetectionstounlock: thresholdPrefs.mindetectionstounlock,
+      });
+    } catch (error) {
+      logger.error('Error fetching dashboard config:', error);
+      // Keep default values on error
+    }
+  }
+  
   // Manual refresh function that works with both SSE and polling
   function handleManualRefresh() {
     // Clear animation state on manual refresh
@@ -394,11 +415,17 @@ Performance Optimizations:
       ctx.fillRect(col, i, n, 1);
     }
   }
-
-  onMount(() => {
+  
+  async function startUp() {
+    await fetchSoundIdConfig();
+    
     // Setup SSE connection for real-time updates
     connectToDetectionStream();
     connectToSpectrogramStream();
+  }
+
+  onMount(() => {
+    startUp();
 
     return () => {
       // Clean up SSE connection
@@ -452,23 +479,22 @@ Performance Optimizations:
   
   function getBirdSingingThreshold()
   {
-    return 0.96
+    return thresholdPrefs.birdsingingthreshold;
   }
   
   function getInitialThreshold()
   {
-    //return 0.5; // dev value?
-    return 0.7; // old value?
+    return thresholdPrefs.initialthreshold;
   }
   
   function getUnlockedBirdThreshold()
   {
-    return 0.2;
+    return thresholdPrefs.unlockedthreshold;
   }
   
   function getMinDetectionsToUnlock()
   {
-    return 2;
+    return thresholdPrefs.mindetectionstounlock;
   }
   
   
