@@ -1,12 +1,12 @@
 <!--
-MerlinResultsGrid.svelte - Daily bird species detection summary table
+MerlinResultsGrid.svelte - Display detected birds in realtime
 
 Purpose:
-- Displays daily bird species summaries with hourly detection counts
-- Integrates sun times to highlight sunrise/sunset hours
+- Displays bird species
 
 Props:
 - data: MerlinSpeciesSummary[] - Array of species detection summaries
+- birdSinging: MerlinSpeciesSummary - Whether the model thinks a bird is present
 -->
 
 <script lang="ts">
@@ -66,70 +66,57 @@ Props:
   });
 </script>
 
-    <!-- Grid Content -->
-        <div
-          class="merlin-results-grid mb-4 max-w-[800px]"
-          style:--species-col-width={speciesColumnWidth}
-        >
-          <!-- Species rows -->
-          <div class="flex flex-col" style:gap="var(--grid-gap)">
-            {#each data as item (item.common_name)}
-              {#key item.count}
-                <div
-                  class="flex items-center species-row"
-                >
-                  <!-- Species info column -->
-                  <div class="species-label-col shrink-0 flex items-center gap-4 px-4 py-1">
-                    <MerlinThumbnail
-                      thumbnailUrl={
-                        `/api/v2/media/species-image?name=${encodeURIComponent(item.scientific_name)}`}
-                      commonName={item.common_name}
-                      scientificName={item.common_name}
-                    />
-                  <span
-                    class="text-md font-medium leading-tight flex items-center gap-1 overflow-hidden"
-                    title={item.common_name}
-                  >
-                    <span class="truncate flex-1" class:highlight={item.count > 0}>{item.common_name}</span>
-                  </span>
-                  <span
-                    class="ml-auto text-md font-medium leading-tight flex items-center gap-1 overflow-hidden"
-                    title={item.common_name}
-                  >
-                    <span class="truncate flex-1">{Math.floor(item.confidence*100)}%</span>
-                  </span>                  
-                </div>
+<div
+  class="merlin-results-grid mb-4 max-w-[800px]"
+  style:--species-col-width={speciesColumnWidth}
+>
+  <!-- Species rows -->
+  <div class="flex flex-col" style:gap="var(--grid-gap)">
+    {#each data as item (item.common_name)}
+      {#key item.count}
+        <div class="flex items-center species-row">
+          <div class="species-label-col shrink-0 flex items-center gap-4 px-4 py-1">
 
-              </div>
-              {/key}
-            {/each}
+            <!-- Species thumbnail -->
+            <MerlinThumbnail
+              thumbnailUrl={`/api/v2/media/species-image?name=${encodeURIComponent(item.scientific_name)}`}
+              commonName={item.common_name}
+              scientificName={item.common_name}
+            />
+
+            <!-- Species name -->
+            <span class="text-md font-medium leading-tight flex items-center gap-1 overflow-hidden">
+              <span class="truncate flex-1" class:highlight={item.count > 0}>{item.common_name}</span>
+            </span>
+
+            <!-- Detection confidence -->
+            <span class="ml-auto text-md font-medium leading-tight flex items-center gap-1 overflow-hidden">
+              <span class="truncate flex-1">{Math.floor(item.confidence*100)}%</span>
+            </span>
+
           </div>
         </div>
+      {/key}
+    {/each}
+  </div>
+</div>
 
-        {#if data.length === 0}
-          <div
-            class="text-center py-8 max-w-[800px]"
-            style:color="color-mix(in srgb, var(--color-base-content) 60%, transparent)"
-          >
-            Listening for birds...
-          </div>
-        {/if}
+ {#if data.length === 0}
+  <div
+    class="text-center py-8 max-w-[800px]"
+    style:color="color-mix(in srgb, var(--color-base-content) 60%, transparent)"
+  >
+    Listening for birds...
+  </div>
+{/if}
 
 <style>
 
-  @keyframes rowHighlight {
-    0% { background-color: #fff5c2; }
-    100% { background-color: transparent; }
-  }
-
-  .species-row:has(.highlight) {
-    animation: rowHighlight 1.75s ease-out forwards;
-  }
-  
   /* ========================================================================
-     CSS Custom Properties for Daily Summary Grid
+     CSS Custom Properties for results grid
      Scoped to component to avoid global conflicts
      ======================================================================== */
+
   .merlin-results-grid {
     --grid-cell-radius: 4px;
     --grid-gap: 1px; /* Gap between grid cells */
@@ -139,10 +126,6 @@ Props:
     --species-col-min-width: 9rem; /* Fallback, matches CONFIG.SPECIES_COLUMN.MIN_WIDTH */
     --species-col-max-width: 16rem; /* Fallback, matches CONFIG.SPECIES_COLUMN.MAX_WIDTH */
   }
-
-  /* ========================================================================
-     CSS Grid Layout Styles
-     ======================================================================== */
 
   /* Species label column - fixed width calculated from longest species name */
   .species-label-col {
@@ -154,29 +137,18 @@ Props:
     border-radius: var(--grid-cell-radius);
   }
 
+  @keyframes rowHighlight {
+    0% { background-color: #fff5c2; }
+    100% { background-color: transparent; }
+  }
+
+  /* Highlight background on update */
+  .species-row:has(.highlight) {
+    animation: rowHighlight 1.75s ease-out forwards;
+  }
+
   .species-row:hover {
     background-color: var(--hover-overlay);
   }
 
-  /* ========================================================================
-     Species Column & Badge Styles
-     ======================================================================== */
-
-  :global(.species-column) {
-    width: auto;
-    min-width: 0;
-    max-width: var(--species-col-max-width, 18rem);
-    padding: 0 0.75rem 0 0.5rem !important;
-  }
-
-
-  /* ========================================================================
-     Daylight Row Styles
-     ======================================================================== */
-
-
-  :global(.overflow-y-visible) {
-    overflow-y: visible !important;
-  }
-  
 </style>
