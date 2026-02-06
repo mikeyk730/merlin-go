@@ -68,7 +68,6 @@ Performance Optimizations:
         confidence: 0,
         maxConfidence: 0,
         count: 0,
-        countIncreased: false,
       });
 
   let thresholdPrefs : SoundIdConfig = {
@@ -90,71 +89,6 @@ Performance Optimizations:
     } catch (error) {
       logger.error('Error fetching dashboard config:', error);
       // Keep default values on error
-    }
-  }
-
-  // Animation cleanup timers and RAF manager - use $state.raw() for performance
-  let animationCleanupTimers = $state.raw(new Set<ReturnType<typeof setTimeout>>());
-  let animationFrame: number | null = null;
-  let pendingCleanups = $state.raw(new Map<string, { fn: () => void; timestamp: number }>());
-
-  // Clear animation states from daily summary
-  function clearDailySummaryAnimations() {
-    speciesSummary = speciesSummary.map(species => ({
-      ...species,
-      countIncreased: false,
-    }));
-
-    // Clear any pending animation cleanup timers
-    animationCleanupTimers.forEach(timer => clearTimeout(timer));
-    animationCleanupTimers.clear();
-  }
-
-  // Process pending cleanups using requestAnimationFrame
-  function processCleanups(currentTime: number) {
-    const toExecute: Array<() => void> = [];
-
-    pendingCleanups.forEach((cleanup, key) => {
-      if (currentTime >= cleanup.timestamp) {
-        toExecute.push(cleanup.fn);
-        pendingCleanups.delete(key);
-      }
-    });
-
-    // Execute cleanups in batch
-    toExecute.forEach(fn => fn());
-
-    // Continue if there are more pending cleanups
-    if (pendingCleanups.size > 0) {
-      animationFrame = window.requestAnimationFrame(processCleanups);
-    } else {
-      animationFrame = null;
-    }
-  }
-
-  // Centralized animation cleanup with RAF batching
-  function scheduleAnimationCleanup(cleanupFn: () => void, delay: number, key?: string) {
-    // Use species code as key if available, otherwise generate one
-    const cleanupKey = key || `cleanup-${Date.now()}-${Math.random()}`;
-
-    // Performance: Limit concurrent animations to prevent overwhelming the UI
-    if (pendingCleanups.size > 50) {
-      logger.warn('Too many concurrent animations, clearing oldest to prevent performance issues');
-      const oldestKey = pendingCleanups.keys().next().value;
-      if (oldestKey) {
-        pendingCleanups.delete(oldestKey);
-      }
-    }
-
-    // Schedule cleanup
-    pendingCleanups.set(cleanupKey, {
-      fn: cleanupFn,
-      timestamp: window.performance.now() + delay,
-    });
-
-    // Start RAF loop if not already running
-    if (animationFrame === null) {
-      animationFrame = window.requestAnimationFrame(processCleanups);
     }
   }
 
@@ -374,19 +308,6 @@ Performance Optimizations:
         spectrogramEventSource.close();
         spectrogramEventSource = null;
       }
-
-      // Clean up animation timers
-      animationCleanupTimers.forEach(timer => clearTimeout(timer));
-      animationCleanupTimers.clear();
-
-      // Cancel pending RAF
-      if (animationFrame !== null) {
-        window.cancelAnimationFrame(animationFrame);
-        animationFrame = null;
-      }
-
-      // Clear pending cleanups
-      pendingCleanups.clear();
     };
   });
 
@@ -402,7 +323,6 @@ Performance Optimizations:
         birdSinging.maxConfidence = Math.max(birdSinging.maxConfidence, rec.confidence);
         birdSinging.confidence = rec.confidence;
         birdSinging.count++;
-        birdSinging.countIncreased = true;
         
         continue;
       }
@@ -570,7 +490,6 @@ Performance Optimizations:
         return;
       const updated = { ...existing };
       updated.count++;
-      updated.countIncreased = true;
       updated.maxConfidence = Math.max(updated.maxConfidence, detection.confidence)
       updated.confidence = detection.confidence;
 
@@ -583,30 +502,6 @@ Performance Optimizations:
       logger.debug(
         `Updated species: ${detection.commonName} (count: ${updated.count})`
       );
-
-      // Clear animation flags after animation completes
-      scheduleAnimationCleanup(
-        () => {
-          const currentIndex = speciesSummary.findIndex(
-            s => s.common_name === detection.commonName
-          );
-          if (currentIndex >= 0) {
-            const currentItem = safeArrayAccess(speciesSummary, currentIndex);
-            if (!currentItem) 
-              return;
-            const cleared = { ...currentItem };
-            cleared.countIncreased = false;
-
-            speciesSummary = [
-              ...speciesSummary.slice(0, currentIndex),
-              cleared,
-              ...speciesSummary.slice(currentIndex + 1),
-            ];
-          }
-        },
-        1000,
-        `count-${detection.scientificName}`
-      );
     } else {
       // Add new species
       const newSpecies: MerlinSpeciesSummary = {
@@ -615,37 +510,12 @@ Performance Optimizations:
         confidence: detection.confidence,
         maxConfidence: detection.confidence,
         count: 1,
-        countIncreased: true,
       };
 
       // Add to array
       speciesSummary = [newSpecies, ...speciesSummary];
 
       logger.debug(`Added new species: ${detection.commonName} (count: 1)`);
-
-      // Clear animation flag after animation completes
-      scheduleAnimationCleanup(
-        () => {
-          const currentIndex = speciesSummary.findIndex(
-            s => s.common_name === detection.commonName
-          );
-          if (currentIndex >= 0) {
-            const currentItem = safeArrayAccess(speciesSummary, currentIndex);
-            if (!currentItem) 
-              return;
-            const cleared = { ...currentItem };
-            cleared.countIncreased = false;
-
-            speciesSummary = [
-              ...speciesSummary.slice(0, currentIndex),
-              cleared,
-              ...speciesSummary.slice(currentIndex + 1),
-            ];
-          }
-        },
-        1000,
-        `count-${detection.scientificName}`
-      );
     }
   }
 </script>

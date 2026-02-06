@@ -156,6 +156,4 @@ export interface MerlinSpeciesSummary {
   count: number;
   confidence: number;
   maxConfidence: number;
-  // Animation state flags
-  countIncreased?: boolean; // Count increment animation
 }

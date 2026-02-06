@@ -37,7 +37,6 @@ Props:
         confidence: 0,
         maxConfidence: 0,
         count: 0,
-        countIncreased: false,
       },
   }: Props = $props();
 
@@ -64,44 +63,6 @@ Props:
     const finalWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, calculatedWidth));
 
     return `${finalWidth}rem`;
-  });
-
-  // Track which species have been highlighted recently (for restart detection)
-  const highlightedSpecies = $state.raw(new Map<string, number>());
-  
-  // Track previous counts to detect changes
-  const previousCounts = $state.raw(new Map<string, number>());
-  
-  // Track timeouts per species so we can cancel them on re-highlight
-  const highlightTimeouts = $state.raw(new Map<string, ReturnType<typeof setTimeout>>());
-
-  // Add effect to track count changes
-  $effect(() => {
-    data.forEach(item => {
-      const prevCount = previousCounts.get(item.common_name);
-      
-      if (prevCount !== item.count) {
-        // Clear any existing timeout for this species
-        const existingTimeout = highlightTimeouts.get(item.common_name);
-        if (existingTimeout !== undefined) {
-          clearTimeout(existingTimeout);
-        }
-        
-        const now = Date.now();
-        highlightedSpecies.set(item.common_name, now);
-        
-        // Set new timeout and store it
-        const timeout = setTimeout(() => {
-          highlightedSpecies.delete(item.common_name);
-          highlightTimeouts.delete(item.common_name);
-        }, 3000);
-        
-        highlightTimeouts.set(item.common_name, timeout);
-      }
-      
-      // Update previous count for next comparison
-      previousCounts.set(item.common_name, item.count);
-    });
   });
 </script>
 
