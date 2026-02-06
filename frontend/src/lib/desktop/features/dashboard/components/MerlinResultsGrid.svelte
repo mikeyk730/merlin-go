@@ -6,7 +6,6 @@ Purpose:
 
 Props:
 - data: MerlinSpeciesSummary[] - Array of species detection summaries
-- birdSinging: MerlinSpeciesSummary - Whether the model thinks a bird is present
 -->
 
 <script lang="ts">
@@ -26,18 +25,10 @@ Props:
 
   interface Props {
     data: MerlinSpeciesSummary[];
-    birdSinging: MerlinSpeciesSummary;
   }
 
   let {
     data = [],
-    birdSinging = {
-        common_name: "",
-        scientific_name: "",
-        confidence: 0,
-        maxConfidence: 0,
-        count: 0,
-      },
   }: Props = $props();
 
 
@@ -65,6 +56,15 @@ Props:
     return `${finalWidth}rem`;
   });
 </script>
+
+{#if data.length === 0}
+  <div
+    class="text-center py-8 max-w-[800px]"
+    style:color="color-mix(in srgb, var(--color-base-content) 60%, transparent)"
+  >
+    Listening for birds...
+  </div>
+{/if}
 
 <div
   class="merlin-results-grid mb-4 max-w-[800px]"
@@ -100,15 +100,6 @@ Props:
     {/each}
   </div>
 </div>
-
- {#if data.length === 0}
-  <div
-    class="text-center py-8 max-w-[800px]"
-    style:color="color-mix(in srgb, var(--color-base-content) 60%, transparent)"
-  >
-    Listening for birds...
-  </div>
-{/if}
 
 <style>
 

@@ -178,9 +178,9 @@ Performance Optimizations:
       logger.error('Error processing detection data:', error);
     }
   }
-  
+
   let spectrogramEventSource: ReconnectingEventSource | null = null;
-  
+
   // Connect to SSE stream for real-time updates using ReconnectingEventSource
   function connectToSpectrogramStream() {
     logger.debug('Connecting to SSE stream at /api/v2/spectrogram/stream');
@@ -247,36 +247,36 @@ Performance Optimizations:
       setTimeout(() => connectToSpectrogramStream(), 5000);
     }
   }
-    
+
   function handleSpectrogramData(bytes: Uint8Array) {
     draw(bytes.slice(0, 257));
     draw(bytes.slice(257, 514));
   }
-  
+
   function draw(freqArray: Uint8Array) {
     requestAnimationFrame(function() {
         dodraw(freqArray);
     });
   }
-  
+
   function dodraw(freqArray: Uint8Array) {
     const canvas = <HTMLCanvasElement> document.getElementById('spectrogram');
     if (canvas === null) {
       console.log("canvas is null");
       return;
     }
-    
+
     const ctx = canvas.getContext('2d');
     if (ctx === null) {
       console.log("ctx is null");
       return;
     }
-    
+
     let n = 3;
-    
+
     // Shift existing content left by 1 pixel
     ctx.drawImage(canvas, -1*n, 0);
-    
+
     // Draw new slice on the right edge
     const col = canvas.width - n;
     for (let i = 0; i < freqArray.length; i++) {
@@ -285,10 +285,10 @@ Performance Optimizations:
       ctx.fillRect(col, i, n, 1);
     }
   }
-  
+
   async function startUp() {
     await fetchSoundIdConfig();
-    
+
     // Setup SSE connection for real-time updates
     connectToDetectionStream();
     connectToSpectrogramStream();
@@ -303,7 +303,7 @@ Performance Optimizations:
         eventSource.close();
         eventSource = null;
       }
-      
+
       if (spectrogramEventSource) {
         spectrogramEventSource.close();
         spectrogramEventSource = null;
@@ -323,47 +323,47 @@ Performance Optimizations:
         birdSinging.maxConfidence = Math.max(birdSinging.maxConfidence, rec.confidence);
         birdSinging.confidence = rec.confidence;
         birdSinging.count++;
-        
+
         continue;
       }
       handleNewDetection(rec);
     }
   }
-  
-  
+
+
   //
   // ThresholdPrefs
   //
-  
+
   function getBirdSingingThreshold()
   {
     return thresholdPrefs.birdsingingthreshold;
   }
-  
+
   function getInitialThreshold()
   {
     return thresholdPrefs.initialthreshold;
   }
-  
+
   function getUnlockedBirdThreshold()
   {
     return thresholdPrefs.unlockedthreshold;
   }
-  
+
   function getMinDetectionsToUnlock()
   {
     return thresholdPrefs.mindetectionstounlock;
   }
-  
-  
+
+
   //
   // ClassificationResultsProcessorImpl
   //
-  
+
   let SINGING_BIRD_NAME = "bird sp."
   let unlockedSpecies = new Set<string>([SINGING_BIRD_NAME]);
   let previousDetections = new Array<SoundRecognition>();
- 
+
   function filterAndSortResults(recs: SoundRecognition[])
   {
     let filteredResults = filterByThreshold(recs);
@@ -371,12 +371,12 @@ Performance Optimizations:
     {
       return new Array<SoundRecognition>();
     }
-    
+
     let history = updateHistory(filteredResults);
     updateUnlockedSpecies(filteredResults, history);
-    
+
     let results = new Array<SoundRecognition>();
-    
+
     for (const rec of filteredResults)
     {
       if (isUnlocked(rec))
@@ -384,14 +384,14 @@ Performance Optimizations:
         results.push(rec);
       }
     }
-    
-    results.sort(function(a, b) { 
+
+    results.sort(function(a, b) {
       return a.confidence - b.confidence;
     });
-    
+
     return results;
   }
-  
+
   function updateUnlockedSpecies(recs: SoundRecognition[], history: Map<string, number>)
   {
     for (const rec of recs)
@@ -402,7 +402,7 @@ Performance Optimizations:
       }
     }
   }
- 
+
   function unlock(commonName: string, history: Map<string, number>)
   {
     const count = history.get(commonName) || 0;
@@ -410,11 +410,11 @@ Performance Optimizations:
       unlockedSpecies.add(commonName);
     }
   }
-  
+
   function updateHistory(recs: SoundRecognition[])
   {
     let detectionHistory = new Map<string, number>();
-    
+
     for (const rec of previousDetections) {
       let name = rec.commonName;
       const currentCount = detectionHistory.get(name) || 0;
@@ -425,12 +425,12 @@ Performance Optimizations:
       const currentCount = detectionHistory.get(name) || 0;
       detectionHistory.set(name, currentCount + 1);
     }
-    
+
     previousDetections = recs;
-    
+
     return detectionHistory;
   }
-  
+
   function containsBirdSinging(recs: SoundRecognition[])
   {
     for (const rec of recs)
@@ -440,14 +440,14 @@ Performance Optimizations:
         return true;
       }
     }
-    
+
     return false;
   }
-  
+
   function filterByThreshold(recs: SoundRecognition[])
   {
     let results = new Array<SoundRecognition>();
-    
+
     for (const rec of recs)
     {
       if (rec.confidence >= getMinConfidence(rec))
@@ -455,20 +455,20 @@ Performance Optimizations:
         results.push(rec);
       }
     }
-    
+
     return results;
   }
-  
+
   function getMinConfidence(rec: SoundRecognition)
   {
       if (rec.commonName == SINGING_BIRD_NAME) {
         return getBirdSingingThreshold();
       }
-      
+
       if (isUnlocked(rec)) {
         return getUnlockedBirdThreshold();
       }
-      
+
       return getInitialThreshold();
   }
 
@@ -486,7 +486,7 @@ Performance Optimizations:
     if (existingIndex >= 0) {
       // Update existing species
       const existing = safeArrayAccess(speciesSummary, existingIndex);
-      if (!existing) 
+      if (!existing)
         return;
       const updated = { ...existing };
       updated.count++;
@@ -524,10 +524,37 @@ Performance Optimizations:
   <div class="pt-8 card bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible inline-block">
     <div class="overflow-x-auto overflow-y-visible inline-block">
       <canvas id="spectrogram" width="800" height="257" class="mb-4"></canvas>
+      <div id="singingBirdIndicator">
+        {#key birdSinging.count}
+          <span class="bird-indicator" class:bird-singing={birdSinging.count > 0}>&#x2B24;</span>
+        {/key}
+      </div>
       <MerlinResultsGrid
         data={speciesSummary}
-        {birdSinging}  
       />
     </div>
   </div>
 </section>
+
+<style>
+  .bird-indicator
+  {
+    visibility: hidden;
+  }
+
+  .bird-indicator.bird-singing
+  {
+    visibility: visible;
+    animation: singingAnimation 1.75s ease-out forwards;
+  }
+
+  @keyframes singingAnimation {
+    0% {
+      color: #33f;
+    }
+    to {
+      color: transparent;
+    }
+  }
+
+</style>
