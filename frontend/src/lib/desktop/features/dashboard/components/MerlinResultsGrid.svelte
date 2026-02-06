@@ -26,14 +26,19 @@ Props:
 
   interface Props {
     data: MerlinSpeciesSummary[];
-    hasBirdSinging: boolean;
-    newDetectionIds?: Set<string>;
+    birdSinging: MerlinSpeciesSummary;
   }
 
   let {
     data = [],
-    hasBirdSinging = false,
-    newDetectionIds = new Set(),
+    birdSinging = {
+        common_name: "",
+        scientific_name: "",
+        confidence: 0,
+        maxConfidence: 0,
+        count: 0,
+        countIncreased: false,
+      },
   }: Props = $props();
 
 
@@ -104,15 +109,13 @@ Props:
         <div
           class="merlin-results-grid mb-4 max-w-[800px]"
           style:--species-col-width={speciesColumnWidth}
-          class:bird-singing={hasBirdSinging}
         >
           <!-- Species rows -->
           <div class="flex flex-col" style:gap="var(--grid-gap)">
             {#each data as item (item.common_name)}
-              {#key highlightedSpecies.get(item.common_name)}
+              {#key item.count}
                 <div
                   class="flex items-center species-row"
-                  class:row-highlight={item.countIncreased}
                 >
                   <!-- Species info column -->
                   <div class="species-label-col shrink-0 flex items-center gap-4 px-4 py-1">
@@ -126,7 +129,7 @@ Props:
                     class="text-md font-medium leading-tight flex items-center gap-1 overflow-hidden"
                     title={item.common_name}
                   >
-                    <span class="truncate flex-1">{item.common_name}</span>
+                    <span class="truncate flex-1" class:highlight={item.count > 0}>{item.common_name}</span>
                   </span>
                   <span
                     class="ml-auto text-md font-medium leading-tight flex items-center gap-1 overflow-hidden"
@@ -158,7 +161,7 @@ Props:
     100% { background-color: transparent; }
   }
 
-  .row-highlight {
+  .species-row:has(.highlight) {
     animation: rowHighlight 1.75s ease-out forwards;
   }
   

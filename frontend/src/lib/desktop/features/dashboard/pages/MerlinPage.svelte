@@ -62,10 +62,14 @@ Performance Optimizations:
 
   // State management
   let speciesSummary = $state<MerlinSpeciesSummary[]>([]);
-  let hasBirdSinging = $state(false);
-
-  // Animation state for new detections
-  let newDetectionIds = $state(new Set<string>()); //todo:mdk use this?
+  let birdSinging = $state({
+        common_name: "",
+        scientific_name: "",
+        confidence: 0,
+        maxConfidence: 0,
+        count: 0,
+        countIncreased: false,
+      });
 
   let thresholdPrefs : SoundIdConfig = {
     birdsingingthreshold: 1.0,
@@ -87,12 +91,6 @@ Performance Optimizations:
       logger.error('Error fetching dashboard config:', error);
       // Keep default values on error
     }
-  }
-  
-  // Manual refresh function that works with both SSE and polling
-  function handleManualRefresh() {
-    // Clear animation state on manual refresh
-    newDetectionIds.clear();
   }
 
   // Animation cleanup timers and RAF manager - use $state.raw() for performance
@@ -394,18 +392,20 @@ Performance Optimizations:
 
   // Incremental daily summary update when new detection arrives via SSE
   function handleNewPrediction(data: ModelPredictions) {
-    newDetectionIds.clear();
-    
-    hasBirdSinging = false;
     let recs = filterAndSortResults(data.predictions);
     for (const rec of recs)
     {
       if (rec.commonName == SINGING_BIRD_NAME)
       {
-        hasBirdSinging = true;
+        birdSinging.common_name = rec.commonName;
+        birdSinging.scientific_name = rec.scientificName;
+        birdSinging.maxConfidence = Math.max(birdSinging.maxConfidence, rec.confidence);
+        birdSinging.confidence = rec.confidence;
+        birdSinging.count++;
+        birdSinging.countIncreased = true;
+        
         continue;
       }
-      newDetectionIds.add(rec.commonName);
       handleNewDetection(rec);
     }
   }
@@ -656,8 +656,7 @@ Performance Optimizations:
       <canvas id="spectrogram" width="800" height="257" class="mb-4"></canvas>
       <MerlinResultsGrid
         data={speciesSummary}
-        {hasBirdSinging}  
-        {newDetectionIds}  
+        {birdSinging}  
       />
     </div>
   </div>
