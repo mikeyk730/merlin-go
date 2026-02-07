@@ -1,7 +1,7 @@
 <!--
 mdk:todo:
--add bird is singing indicator
 -backend needs to use different thresholds for sound id events
+-sse should be sent even for empty detections
 -turn off spectrogram events when not on sound id page
 lower priority:
 -displayed species should decay over time (if haven't heard in 15, 30, 60 mins?)
