@@ -322,7 +322,15 @@ Performance Optimizations:
         birdSinging.scientific_name = rec.scientificName;
         birdSinging.maxConfidence = Math.max(birdSinging.maxConfidence, rec.confidence);
         birdSinging.confidence = rec.confidence;
-        birdSinging.count++;
+
+        if (recs.length == 1)
+        {
+          birdSinging.count++; //todo: need to clear this after 1 second of idle
+        }
+        else
+        {
+          birdSinging.count = 0;
+        }
 
         continue;
       }
@@ -524,9 +532,12 @@ Performance Optimizations:
   <div class="pt-8 card bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible inline-block">
     <div class="overflow-x-auto overflow-y-visible inline-block">
       <canvas id="spectrogram" width="800" height="257" class="mb-4"></canvas>
-      <div id="singingBirdIndicator">
+      <div id="singingBirdIndicator" class="flex flex-col">
         {#key birdSinging.count}
-          <span class="bird-indicator" class:bird-singing={birdSinging.count > 0}>&#x2B24;</span>
+          <span class="btext-xs ml-auto flex items-center">
+            <span class="bird-indicator-text" class:bird-singing={birdSinging.count > 3}>Hearing a bird</span>
+            <span class="bird-indicator" class:bird-singing={birdSinging.count > 0}>&#x25CF;</span>
+          </span>
         {/key}
       </div>
       <MerlinResultsGrid
@@ -537,7 +548,7 @@ Performance Optimizations:
 </section>
 
 <style>
-  .bird-indicator
+  .bird-indicator, .bird-indicator-text
   {
     visibility: hidden;
   }
@@ -545,16 +556,41 @@ Performance Optimizations:
   .bird-indicator.bird-singing
   {
     visibility: visible;
-    animation: singingAnimation 1.75s ease-out forwards;
+    animation: singingIndicatorAnimation 1.75s ease-out forwards;
   }
+  
+  .bird-indicator-text.bird-singing
+  {
+    visibility: visible;
+    text-transform: uppercase;
+    animation: singingTextAnimation 1.75s ease-out forwards;
+  }  
 
-  @keyframes singingAnimation {
+  @keyframes singingIndicatorAnimation {
     0% {
-      color: #33f;
+      color: #6fa8e9;
+    }
+    50% {
+      color: #2b73cc
+    }
+    99% {
+      color: #6fa8e9;
     }
     to {
       color: transparent;
     }
   }
+
+  @keyframes singingTextAnimation {
+    0% {
+      color: #2b73cc
+    }
+    99% {
+      color: #2b73cc
+    }
+    to {
+      color: transparent;
+    }
+  }  
 
 </style>
