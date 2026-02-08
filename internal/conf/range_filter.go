@@ -34,7 +34,7 @@ func (s *Settings) GetIncludedSpecies() []string {
 func (s *Settings) IsSpeciesIncluded(result string) bool {
 	speciesListMutex.RLock()
 	defer speciesListMutex.RUnlock()
-	
+
 	for _, fullSpeciesString := range s.BirdNET.RangeFilter.Species {
 		// Check if the full species string starts with our search term
 		if strings.HasPrefix(fullSpeciesString, result) {

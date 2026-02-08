@@ -451,7 +451,7 @@ func publishSoundLevelToMQTT(soundData myaudio.SoundLevelData, proc *processor.P
 }
 
 // startSoundLevelPublishers starts all sound level publishers with the given done channel
-func startSoundLevelPublishers(wg *sync.WaitGroup, doneChan chan struct{}, proc *processor.Processor, soundLevelChan chan myaudio.SoundLevelData, spectrogramChan chan myaudio.UiSpectrogramData, apiController *apiv2.Controller) {
+func startSoundLevelPublishers(wg *sync.WaitGroup, doneChan chan struct{}, proc *processor.Processor, soundLevelChan chan myaudio.SoundLevelData, apiController *apiv2.Controller) {
 	settings := conf.Setting()
 
 	// Create a merged quit channel that responds to both the done channel and global quit
@@ -468,7 +468,7 @@ func startSoundLevelPublishers(wg *sync.WaitGroup, doneChan chan struct{}, proc 
 
 	// Start SSE publisher if API is available
 	if apiController != nil {
-		startSoundLevelSSEPublisherWithDone(wg, mergedQuitChan, apiController, soundLevelChan, spectrogramChan)
+		startSoundLevelSSEPublisherWithDone(wg, mergedQuitChan, apiController, soundLevelChan)
 	}
 
 	// Start metrics publisher
@@ -515,7 +515,7 @@ func startSoundLevelMQTTPublisherWithDone(wg *sync.WaitGroup, doneChan <-chan st
 
 // startSoundLevelSSEPublisherWithDone starts SSE publisher with a custom done channel
 // This is a compatibility wrapper that converts done channel to context for the refactored function
-func startSoundLevelSSEPublisherWithDone(wg *sync.WaitGroup, doneChan chan struct{}, apiController *apiv2.Controller, soundLevelChan chan myaudio.SoundLevelData, spectrogramChan chan myaudio.UiSpectrogramData) {
+func startSoundLevelSSEPublisherWithDone(wg *sync.WaitGroup, doneChan chan struct{}, apiController *apiv2.Controller, soundLevelChan chan myaudio.SoundLevelData) {
 	// Create context that gets canceled when done channel is closed
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -529,9 +529,59 @@ func startSoundLevelSSEPublisherWithDone(wg *sync.WaitGroup, doneChan chan struc
 	}()
 
 	// Call the refactored function with context and receive-only channel
-	//todo:mdk
-	// startSoundLevelSSEPublisher(wg, ctx, apiController, soundLevelChan)
-	startSpectrogramSSEPublisher(wg, ctx, apiController, spectrogramChan)
+	startSoundLevelSSEPublisher(wg, ctx, apiController, soundLevelChan)
+}
+
+// broadcastSoundLevelSSE broadcasts sound level data via SSE with error handling and metrics
+func broadcastSoundLevelSSE(apiController *apiv2.Controller, soundData myaudio.SoundLevelData) error {
+	// Validate data before broadcasting
+	if err := validateSoundLevelData(&soundData); err != nil {
+		// Log validation error if debug enabled
+		if conf.Setting().Realtime.Audio.SoundLevel.Debug {
+			lg := getSoundLevelLogger()
+			lg.Debug("sound level data validation failed for SSE",
+				logger.String("source", soundData.Source),
+				logger.Error(err))
+		}
+		return err
+	}
+
+	// Sanitize data before broadcasting
+	sanitizedData := sanitizeSoundLevelData(soundData)
+
+	if err := apiController.BroadcastSoundLevel(&sanitizedData); err != nil {
+		// Record error metric
+		if m := getSoundLevelMetrics(apiController); m != nil {
+			m.RecordSoundLevelPublishingError(soundData.Source, soundData.Name, "sse", "broadcast_error")
+			m.RecordSoundLevelPublishing(soundData.Source, soundData.Name, "sse", "error")
+		}
+
+		// Return enhanced error
+		return errors.New(err).
+			Component("realtime-analysis").
+			Category(errors.CategoryNetwork).
+			Context("operation", "broadcast_sound_level_sse").
+			Context("source", soundData.Source).
+			Context("name", soundData.Name).
+			Context("bands_count", len(soundData.OctaveBands)).
+			Build()
+	}
+
+	// Record success metric
+	if m := getSoundLevelMetrics(apiController); m != nil {
+		m.RecordSoundLevelPublishing(soundData.Source, soundData.Name, "sse", "success")
+	}
+
+	// Log successful broadcast if debug is enabled
+	if conf.Setting().Realtime.Audio.SoundLevel.Debug {
+		lg := getSoundLevelLogger()
+		lg.Debug("successfully broadcast sound level data via SSE",
+			logger.String("source", soundData.Source),
+			logger.String("name", soundData.Name),
+			logger.Int("bands_count", len(soundData.OctaveBands)))
+	}
+
+	return nil
 }
 
 // startSoundLevelMetricsPublisherWithDone starts metrics publisher with a custom done channel

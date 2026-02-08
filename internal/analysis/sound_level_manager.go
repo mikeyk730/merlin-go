@@ -19,17 +19,15 @@ type SoundLevelManager struct {
 	doneChan       chan struct{}
 	wg             sync.WaitGroup
 	soundLevelChan chan myaudio.SoundLevelData
-	spectrogramChan chan myaudio.UiSpectrogramData
 	proc           *processor.Processor
 	apiController  *apiv2.Controller
 	metrics        *observability.Metrics
 }
 
 // NewSoundLevelManager creates a new sound level manager
-func NewSoundLevelManager(soundLevelChan chan myaudio.SoundLevelData, spectrogramChan chan myaudio.UiSpectrogramData, proc *processor.Processor, apiController *apiv2.Controller, metrics *observability.Metrics) *SoundLevelManager {
+func NewSoundLevelManager(soundLevelChan chan myaudio.SoundLevelData, proc *processor.Processor, apiController *apiv2.Controller, metrics *observability.Metrics) *SoundLevelManager {
 	return &SoundLevelManager{
 		soundLevelChan: soundLevelChan,
-		spectrogramChan: spectrogramChan,
 		proc:           proc,
 		apiController:  apiController,
 		metrics:        metrics,
@@ -47,28 +45,27 @@ func (m *SoundLevelManager) Start() error {
 		return nil
 	}
 
-	//todo:mdk
-	//settings := conf.Setting()
-	//if !settings.Realtime.Audio.SoundLevel.Enabled {
-		//log.Debug("sound level monitoring is disabled")
-		//return nil
-	//}
+	settings := conf.Setting()
+	if !settings.Realtime.Audio.SoundLevel.Enabled {
+		log.Debug("sound level monitoring is disabled")
+		return nil
+	}
 
 	// Update debug log levels
-	//updateSoundLevelDebugSettings()
+	updateSoundLevelDebugSettings()
 
 	// Register sound level processors for all active sources
-	//if err := registerSoundLevelProcessorsForActiveSources(settings); err != nil {
-	//	log.Error("failed to register sound level processors",
-	//		logger.Error(err))
-	//	return err
-	//}
+	if err := registerSoundLevelProcessorsForActiveSources(settings); err != nil {
+		log.Error("failed to register sound level processors",
+			logger.Error(err))
+		return err
+	}
 
 	// Create done channel for this session
 	m.doneChan = make(chan struct{})
 
 	// Start publishers
-	startSoundLevelPublishers(&m.wg, m.doneChan, m.proc, m.soundLevelChan, m.spectrogramChan, m.apiController)
+	startSoundLevelPublishers(&m.wg, m.doneChan, m.proc, m.soundLevelChan, m.apiController)
 
 	m.isRunning = true
 	log.Info("sound level monitoring started")

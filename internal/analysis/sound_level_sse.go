@@ -62,32 +62,3 @@ func startSoundLevelSSEPublisher(wg *sync.WaitGroup, ctx context.Context, apiCon
 		}
 	})
 }
-
-// startSoundLevelSSEPublisher starts a goroutine to consume sound level data and publish via SSE
-func startSpectrogramSSEPublisher(wg *sync.WaitGroup, ctx context.Context, apiController *apiv2.Controller, spectrogramChan <-chan myaudio.UiSpectrogramData) {
-	if apiController == nil {
-		GetLogger().Warn("SSE API controller not available, spectrogram SSE publishing disabled")
-		return
-	}
-
-	wg.Go(func() {
-		GetLogger().Info("Started spectrogram SSE publisher")
-
-		for {
-			select {
-			case <-ctx.Done():
-				GetLogger().Info("Stopping spectrogram SSE publisher")
-				return
-			case spectrogramData := <-spectrogramChan:
-				// Publish spectrogram data via SSE
-				if err := apiController.BroadcastSpectrogram(&spectrogramData); err != nil {
-					// Only log errors occasionally to avoid spam
-					if time.Now().Unix()%60 == 0 { // Log once per minute at most
-						GetLogger().Warn("Error broadcasting spectrogram data via SSE",
-							logger.Error(err))
-					}
-				}
-			}
-		}
-	})
-}

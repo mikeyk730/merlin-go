@@ -1,14 +1,16 @@
 <!--
 mdk:todo:
--backend needs to use different thresholds for sound id events
--sse should be sent even for empty detections
 -turn off spectrogram events when not on sound id page
 lower priority:
+-threads for ui spectrogram
+-3x higher res spectrogram
 -displayed species should decay over time (if haven't heard in 15, 30, 60 mins?)
 -unlocked species should decay over time (more aggressive than above?)
--3x higher res spectrogram
 -use merlin thumbnails
 -code cleanup
+ -recombine thumbnail components
+ -column width logic
+ -isModelPredictions
 
 MerlinPage.svelte - Main dashboard page with bird detection summaries
 

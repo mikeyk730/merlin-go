@@ -35,7 +35,6 @@ const (
 
 	// Endpoints
 	audioLevelStreamEndpoint = "/api/v2/streams/audio-level"
-	//todo:mdk implement here instead of sound level path
 
 	// Audio source display name for privacy (unauthenticated users)
 	audioSourceDefaultName = "audio-source-1"
