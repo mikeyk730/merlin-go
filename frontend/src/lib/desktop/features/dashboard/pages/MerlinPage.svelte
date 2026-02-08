@@ -311,15 +311,21 @@ Performance Optimizations:
   // Incremental daily summary update when new detection arrives via SSE
   function handleNewPrediction(data: ModelPredictions) {
     let recs = filterAndSortResults(data.predictions);
+    if (recs.length == 0)
+    {
+      birdSinging.indicatorCount = 0;
+      birdSinging.hearingCount = 0;
+    }
+
     for (const rec of recs)
     {
       if (rec.commonName == SINGING_BIRD_NAME)
       {
-        birdSinging.indicatorCount++; //todo: need to clear this after 1 second of idle
+        birdSinging.indicatorCount++;
 
         if (recs.length == 1)
         {
-          birdSinging.hearingCount++; //todo: need to clear this after 1 second of idle
+          birdSinging.hearingCount++;
         }
         else
         {

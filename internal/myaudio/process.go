@@ -177,7 +177,7 @@ func ProcessData(bn *birdnet.BirdNET, data []byte, startTime time.Time, source s
 		Results:     results,
 		Source:      audioSource,
 	}
-
+	
 	// Send the results to the queue
 	// Note: No copy needed - ownership transfers to the queue consumer
 	select {

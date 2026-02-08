@@ -35,10 +35,6 @@ func (s *Settings) IsSpeciesIncluded(result string) bool {
 	speciesListMutex.RLock()
 	defer speciesListMutex.RUnlock()
 	
-	if result == "Aves sp._bird sp._bird1" {
-		return true
-	}
-
 	for _, fullSpeciesString := range s.BirdNET.RangeFilter.Species {
 		// Check if the full species string starts with our search term
 		if strings.HasPrefix(fullSpeciesString, result) {

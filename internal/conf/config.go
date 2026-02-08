@@ -929,6 +929,7 @@ type BirdNETConfig struct {
 }
 
 type SoundIdConfig struct {
+	UiModelPath string `json:"uiModelPath"` // path to external ui spectrogram model file
 	BirdSingingThreshold    float64	`json:"birdsingingthreshold"`	//
 	InitialThreshold 		float64	`json:"initialthreshold"`       //
 	UnlockedThreshold   	float64	`json:"unlockedthreshold"`      //
@@ -937,7 +938,6 @@ type SoundIdConfig struct {
 
 type SpectrogramSettings struct {
 	ModelPath   string `json:"modelPath"`   // path to external spectrogram model file
-	UiModelPath string `json:"uiModelPath"` // path to external ui spectrogram model file
 }
 
 // RangeFilterSettings contains settings for the range filter

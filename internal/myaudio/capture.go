@@ -799,7 +799,7 @@ func captureAudioMalgo(settings *conf.Settings, source captureSource, sourceID s
 		}
 	}
 	
-	uiSpectrogramInterpreter, err = InitializeUiSpectrogramModel(settings.BirdNET.Spectrogram.UiModelPath)
+	uiSpectrogramInterpreter, err = InitializeUiSpectrogramModel(settings.SoundId.UiModelPath)
 	if err != nil {
 		log.Error("Failed to initialize UI spectrogram model", logger.Error(err))
 	}

@@ -460,13 +460,13 @@ func (p *Processor) processDetections(item birdnet.Results) {
 	// processResults() returns a slice of detections, we iterate through each and process them
 	// detections are put into pendingDetections map where they are held until flush deadline is reached
 	// once deadline is reached detections are delivered to workers for actions (save to db etc) processing
-	detectionResults := p.processResults(item)
+	detectionResults, merlinResults := p.processResults(item)
 	
 	// todo:mdk broadcast detection via SSE here for merlin ui
 	if merlinSSEBroadcaster := p.GetMerlinSSEBroadcaster(); merlinSSEBroadcaster != nil {
-		predictions := make([]birdnet.MerlinPrediction, len(detectionResults))
-		for i := range detectionResults {
-			det := detectionResults[i]
+		predictions := make([]birdnet.MerlinPrediction, len(merlinResults))
+		for i := range merlinResults {
+			det := merlinResults[i]
 			predictions[i] = birdnet.MerlinPrediction{
 				CommonName: det.Result.Species.CommonName,
 				ScientificName: det.Result.Species.ScientificName,
@@ -542,9 +542,10 @@ func (p *Processor) processDetections(item birdnet.Results) {
 // processResults processes the results from the BirdNET prediction and returns a list of detections.
 //
 //nolint:gocritic // hugeParam: Pass by value is intentional - avoids pointer dereferencing in hot path
-func (p *Processor) processResults(item birdnet.Results) []Detections {
+func (p *Processor) processResults(item birdnet.Results) ([]Detections, []Detections) {
 	// Pre-allocate slice with capacity for all results
 	detections := make([]Detections, 0, len(item.Results))
+	merlinDetections := make([]Detections, 0, len(item.Results))
 
 	// Collect processing time metric
 	if p.Settings.Realtime.Telemetry.Enabled && p.Metrics != nil && p.Metrics.BirdNET != nil {
@@ -583,16 +584,22 @@ func (p *Processor) processResults(item birdnet.Results) []Detections {
 
 		// Check if detection should be filtered
 		shouldSkip, _ := p.shouldFilterDetection(result, commonName, scientificName, speciesLowercase, baseThreshold, item.Source.ID)
-		if shouldSkip {
+		shouldSkipMerlin := p.shouldFilterDetectionForMerlin(result)
+		if shouldSkip && shouldSkipMerlin {
 			continue
 		}
 
 		// Create the detection
 		det := p.createDetection(item, result, scientificName, commonName, speciesCode)
-		detections = append(detections, det)
+		if !shouldSkip {
+			detections = append(detections, det)
+		}
+		if !shouldSkipMerlin {
+			merlinDetections = append(merlinDetections, det)
+		}
 	}
 
-	return detections
+	return detections, merlinDetections
 }
 
 // parseAndValidateSpecies parses species information and validates it
@@ -653,7 +660,7 @@ func (p *Processor) shouldFilterDetection(result datastore.Results, commonName, 
 	}
 
 	// Check confidence threshold
-	if result.Confidence <= confidenceThreshold {
+	if result.Confidence < confidenceThreshold {
 		if p.Settings.Debug {
 			GetLogger().Debug("Detection filtered out due to low confidence",
 				logger.String("species", result.Species),
@@ -677,6 +684,40 @@ func (p *Processor) shouldFilterDetection(result datastore.Results, commonName, 
 	}
 
 	return false, confidenceThreshold
+}
+
+// shouldFilterDetectionForMerlin checks if a detection should be filtered out
+func (p *Processor) shouldFilterDetectionForMerlin(result datastore.Results) (shouldFilter bool) {
+	confidenceThreshold := float32(p.Settings.SoundId.UnlockedThreshold)
+	
+	// Check confidence threshold
+	if result.Confidence < confidenceThreshold {
+		if p.Settings.Debug {
+			GetLogger().Debug("Merlin detection filtered out due to low confidence",
+				logger.String("species", result.Species),
+				logger.Float32("confidence", result.Confidence),
+				logger.Float32("threshold", confidenceThreshold),
+				logger.String("operation", "merlin_confidence_filter"))
+		}
+		return true
+	}
+
+	if result.Species == "Aves sp._bird sp._bird1" {
+		return false
+	}
+	
+	// Check species inclusion filter
+	if !p.Settings.IsSpeciesIncluded(result.Species) {
+		if p.Settings.Debug {
+			GetLogger().Debug("species not on included list",
+				logger.String("species", result.Species),
+				logger.Float32("confidence", result.Confidence),
+				logger.String("operation", "merlin_species_inclusion_filter"))
+		}
+		return true
+	}
+
+	return false
 }
 
 // createDetection creates a detection object with all necessary information
