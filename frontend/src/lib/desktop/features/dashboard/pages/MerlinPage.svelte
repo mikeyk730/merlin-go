@@ -1,9 +1,8 @@
 <!--
 mdk:todo:
 -turn off spectrogram events when not on sound id page
-lower priority:
--threads for ui spectrogram
 -3x higher res spectrogram
+-threads for ui spectrogram
 -displayed species should decay over time (if haven't heard in 15, 30, 60 mins?)
 -unlocked species should decay over time (more aggressive than above?)
 -use merlin thumbnails

@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   BINARY_DIR: bin
-  BINARY_NAME: birdnet-go
+  BINARY_NAME: merlin-go
   TFLITE_VERSION: v2.17.1
   LABELS_DIR: internal/birdnet/data/labels
   AVICOMMONS_DATA_DIR: internal/imageprovider/data

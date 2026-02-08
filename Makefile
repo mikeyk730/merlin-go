@@ -22,7 +22,7 @@ dev_server: warn
 clean: warn
 
 BINARY_DIR := bin
-BINARY_NAME := birdnet-go
+BINARY_NAME := merlin-go
 TFLITE_VERSION := v2.17.1
 
 # Common flags
