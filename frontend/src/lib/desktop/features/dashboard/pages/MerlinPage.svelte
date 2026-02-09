@@ -528,10 +528,10 @@ Performance Optimizations:
   }
 </script>
 
-<section class="col-span-12">
+<section class="col-span-12 w-full flex justify-center">
   <div class="card bg-base-100 sm:pt-8 sm:shadow-sm sm:rounded-2xl sm:border sm:border-border-100 overflow-visible inline-block">
     <div class="overflow-x-auto overflow-y-visible inline-block">
-      <canvas id="spectrogram" class="w-full" width="640" height="257"></canvas>
+      <canvas id="spectrogram" class="w-full" width="700" height="257"></canvas>
       <div id="singingBirdIndicator" class="flex flex-col">
         {#key birdSinging.indicatorCount}
           <span class="text-xs p-1 ml-auto flex items-center">

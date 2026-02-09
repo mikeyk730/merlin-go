@@ -23,7 +23,7 @@ Props:
 
 {#if data.length === 0}
   <div
-    class="text-center py-8 max-w-[640px]"
+    class="text-center py-8 max-w-[700px]"
     style:color="color-mix(in srgb, var(--color-base-content) 60%, transparent)"
   >
     Listening for birds...
@@ -31,7 +31,7 @@ Props:
 {/if}
 
 <div
-  class="merlin-results-grid mb-4 max-w-[640px]"
+  class="merlin-results-grid sm:mb-4 max-w-[700px]"
 >
   <!-- Species rows -->
   <div class="flex flex-col" style:gap="var(--grid-gap)">
@@ -53,7 +53,7 @@ Props:
             </span>
 
             <!-- Detection confidence -->
-            <span class="ml-auto text-md font-medium leading-tight flex items-center gap-1 overflow-hidden">
+            <span class="ml-auto max-sm:hidden text-md font-medium leading-tight flex items-center gap-1 overflow-hidden">
               <span class="truncate flex-1">{Math.floor(item.confidence*100)}%</span>
             </span>
 
