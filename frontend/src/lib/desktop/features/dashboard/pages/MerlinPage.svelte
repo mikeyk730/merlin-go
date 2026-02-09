@@ -8,7 +8,6 @@ mdk:todo:
 -use merlin thumbnails
 -code cleanup
  -recombine thumbnail components
- -column width logic
  -isModelPredictions
 
 MerlinPage.svelte - Main dashboard page with bird detection summaries
@@ -530,9 +529,9 @@ Performance Optimizations:
 </script>
 
 <section class="col-span-12">
-  <div class="pt-8 card bg-base-100 shadow-sm rounded-2xl border border-border-100 overflow-visible inline-block">
+  <div class="card bg-base-100 sm:pt-8 sm:shadow-sm sm:rounded-2xl sm:border sm:border-border-100 overflow-visible inline-block">
     <div class="overflow-x-auto overflow-y-visible inline-block">
-      <canvas id="spectrogram" width="800" height="257"></canvas>
+      <canvas id="spectrogram" class="w-full" width="640" height="257"></canvas>
       <div id="singingBirdIndicator" class="flex flex-col">
         {#key birdSinging.indicatorCount}
           <span class="text-xs p-1 ml-auto flex items-center">
