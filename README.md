@@ -2,7 +2,7 @@
 
 Fork of BirdNET-Go to work with Merlin-style models.
 
-<img src="doc/soundid-mobile.jpg" />
+<img src="doc/soundid-mobile.jpg" width="300" />
 <img src="doc/soundid-desktop.png" />
 
 Changes from upstream repo:
