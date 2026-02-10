@@ -1,8 +1,11 @@
 # Merlin-Go
 
-Fork of BirdNET-Go to work with Merlin-style models.
+Fork of BirdNET-Go that modifies code to work with Merlin-style TensorFlow models, and adds a UI that resembles Merlin Sound ID
 
+## Mobile
 <img src="doc/soundid-mobile.jpg" width="300" />
+
+## Desktop
 <img src="doc/soundid-desktop.png" />
 
 Changes from upstream repo:
