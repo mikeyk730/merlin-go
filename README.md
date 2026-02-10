@@ -2,6 +2,9 @@
 
 Fork of BirdNET-Go to work with Merlin-style models.
 
+<img src="doc/soundid-mobile.jpg" />
+<img src="doc/soundid-desktop.png" />
+
 Changes from upstream repo:
 - Support a Merlin-style sound ID model that runs on a spectrogram instead of audio samples
 - Support a Merlin-style spectrogram model to generate spectrograms
