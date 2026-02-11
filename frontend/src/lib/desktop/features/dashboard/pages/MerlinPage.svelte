@@ -1,5 +1,6 @@
 <!--
 mdk:todo:
+-add rare/uncommon indicators
 -turn off spectrogram events when not on sound id page
 -3x higher res spectrogram
 -threads for ui spectrogram
