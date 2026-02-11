@@ -45,6 +45,11 @@ export interface ModelPredictions {
   datetime: string; // YYYY-MM-DD
 };
 
+export interface BirdNETConfig {
+  latitude: number;
+  longitude: number;
+};
+
 export interface SoundIdConfig {
   birdsingingthreshold: number;
   initialthreshold: number;

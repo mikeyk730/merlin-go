@@ -33,7 +33,7 @@ Performance Optimizations:
   import ReconnectingEventSource from 'reconnecting-eventsource';
   import MerlinResultsGrid from '$lib/desktop/features/dashboard/components/MerlinResultsGrid.svelte';
   import { t } from '$lib/i18n';
-  import type { MerlinSpeciesSummary, ModelPredictions, SoundRecognition, SoundIdConfig } from '$lib/types/detection.types';
+  import type { MerlinSpeciesSummary, ModelPredictions, SoundRecognition, SoundIdConfig, BirdNETConfig } from '$lib/types/detection.types';
   import { getLogger } from '$lib/utils/logger';
   import { safeArrayAccess, isPlainObject } from '$lib/utils/security';
   import { api } from '$lib/utils/api';
@@ -61,6 +61,8 @@ Performance Optimizations:
   }
 
   // State management
+  let timer = $state(0);
+  let location = $state({city: null, state: null});
   let speciesSummary = $state<MerlinSpeciesSummary[]>([]);
   let birdSinging = $state({
         indicatorCount: 0,
@@ -283,7 +285,35 @@ Performance Optimizations:
     }
   }
 
+  async function getLocation() {
+    try {
+      let settings = await api.get<BirdNETConfig>('/api/v2/settings/birdnet');
+
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${settings.latitude}&lon=${settings.longitude}&zoom=10`)
+        .then(response => response.json())
+        .then(data => {
+          location.city = data.name;
+        }).catch(error => {
+          logger.error('Error fetching location.city:', error);
+        });
+
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${settings.latitude}&lon=${settings.longitude}&zoom=5`)
+        .then(response => response.json())
+        .then(data => {
+          location.state = data.name;
+        }).catch(error => {
+          logger.error('Error fetching locaation.state:', error);
+        });
+
+    } catch (error) {
+      logger.error('Error fetching BirdNET config:', error);
+    }
+  }
+
+
   async function startUp() {
+    getLocation();
+
     await fetchSoundIdConfig();
 
     // Setup SSE connection for real-time updates
@@ -528,7 +558,6 @@ Performance Optimizations:
     }
   }
 
-  let timer = $state(0)
   setInterval(() => { timer++; }, 1000)
 
   function zeroPadded(n: number) {
@@ -536,9 +565,18 @@ Performance Optimizations:
   }
 
    function formatTime(seconds: number) {
-    const mm = zeroPadded(Math.floor(seconds / 60));
-    const ss = zeroPadded(Math.floor(seconds) % 60);
-    return `${mm}:${ss}`;
+    const h = Math.floor(seconds / 3600);
+    seconds = seconds % 3600;
+
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+
+    if (h)
+    {
+      return `${zeroPadded(h)}:${zeroPadded(m)}:${zeroPadded(s)}`;
+    }
+
+    return `${zeroPadded(m)}:${zeroPadded(s)}`;
   }
 </script>
 
@@ -549,7 +587,10 @@ Performance Optimizations:
       <div id="singingBirdIndicator" class="flex flex-col">
         {#key birdSinging.indicatorCount}
           <span class="text-xs p-1 flex items-center">
-            <span>{formatTime(timer)}</span>
+            {#if location.city && location.state}
+              <span class="mx-1">{location.city}, {location.state}</span>
+            {/if}
+            <span class="mx-1">{formatTime(timer)}</span>
             <span class="ml-auto">
               <span class="bird-indicator-text" class:bird-singing={birdSinging.hearingCount > 3}>Hearing a bird</span>
               <span class="bird-indicator mx-1" class:bird-singing={birdSinging.indicatorCount > 0}>&#x25CF;</span>
