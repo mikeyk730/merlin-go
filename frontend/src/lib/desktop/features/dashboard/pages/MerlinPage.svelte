@@ -1,5 +1,7 @@
 <!--
 mdk:todo:
+-decide where to put city, state
+-timer should only tick when merlin sse is connected
 -add rare/uncommon indicators
 -turn off spectrogram events when not on sound id page
 -3x higher res spectrogram
