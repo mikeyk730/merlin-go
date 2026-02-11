@@ -931,6 +931,7 @@ type BirdNETConfig struct {
 type SoundIdConfig struct {
 	Enabled        			bool    `json:"enabled"`        		//
 	UiModelPath 			string 	`json:"uiModelPath"` 			// path to external ui spectrogram model file
+	LifeListPath 			string 	`json:"lifelistPath"` 			// path to external life list CSV file
 	BirdSingingThreshold    float64	`json:"birdsingingthreshold"`	//
 	InitialThreshold 		float64	`json:"initialthreshold"`       //
 	UnlockedThreshold   	float64	`json:"unlockedthreshold"`      //

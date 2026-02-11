@@ -515,6 +515,7 @@ Performance Optimizations:
       const newSpecies: MerlinSpeciesSummary = {
         common_name: detection.commonName,
         scientific_name: detection.scientificName,
+        inLifeList: detection.inLifeList,
         confidence: detection.confidence,
         maxConfidence: detection.confidence,
         count: 1,
@@ -526,6 +527,19 @@ Performance Optimizations:
       logger.debug(`Added new species: ${detection.commonName} (count: 1)`);
     }
   }
+
+  let timer = $state(0)
+  setInterval(() => { timer++; }, 1000)
+
+  function zeroPadded(n: number) {
+    return n >= 10 ? n.toString() : `0${n}`;
+  }
+
+   function formatTime(seconds: number) {
+    const mm = zeroPadded(Math.floor(seconds / 60));
+    const ss = zeroPadded(Math.floor(seconds) % 60);
+    return `${mm}:${ss}`;
+  }
 </script>
 
 <section class="col-span-12 w-full flex justify-center">
@@ -534,9 +548,12 @@ Performance Optimizations:
       <canvas id="spectrogram" class="w-full" width="700" height="257"></canvas>
       <div id="singingBirdIndicator" class="flex flex-col">
         {#key birdSinging.indicatorCount}
-          <span class="text-xs p-1 ml-auto flex items-center">
-            <span class="bird-indicator-text" class:bird-singing={birdSinging.hearingCount > 3}>Hearing a bird</span>
-            <span class="bird-indicator mx-1" class:bird-singing={birdSinging.indicatorCount > 0}>&#x25CF;</span>
+          <span class="text-xs p-1 flex items-center">
+            <span>{formatTime(timer)}</span>
+            <span class="ml-auto">
+              <span class="bird-indicator-text" class:bird-singing={birdSinging.hearingCount > 3}>Hearing a bird</span>
+              <span class="bird-indicator mx-1" class:bird-singing={birdSinging.indicatorCount > 0}>&#x25CF;</span>
+            </span>
           </span>
         {/key}
       </div>

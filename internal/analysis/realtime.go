@@ -138,7 +138,7 @@ func RealtimeAnalysis(settings *conf.Settings) error {
 	quitChan := make(chan struct{})
 
 	// audioLevelChan and soundLevelChan are already initialized as global variables at package level
-
+	
 	// Initialize audio sources
 	sources, err := initializeAudioSources(settings)
 	if err != nil {

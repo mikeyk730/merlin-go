@@ -42,6 +42,7 @@ type MerlinPrediction struct {
 	CommonName         string                  `json:"commonName"`
 	ScientificName     string                  `json:"scientificName"`
 	Confidence         float64                 `json:"confidence"`
+	InLifeList		   bool                    `json:"inLifeList"`
 }
 
 // BirdNET struct represents the BirdNET model with interpreters and configuration.

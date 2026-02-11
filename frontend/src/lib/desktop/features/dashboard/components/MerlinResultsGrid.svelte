@@ -50,6 +50,7 @@ Props:
             <!-- Species name -->
             <span class="text-md font-medium leading-tight flex items-center gap-1 overflow-hidden">
               <span class="truncate flex-1" class:highlight={item.count > 0}>{item.common_name}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="life-list-indicator w-6 p-1" class:in-life-list={item.inLifeList} fill="#2b73ee"><title>Life list</title><path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="#2b73ee"></path><path d="M7.5 11.3497L10.5 15.3497L16.5 9.34998" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="white"></path></svg>
             </span>
 
             <!-- Detection confidence -->
@@ -70,6 +71,14 @@ Props:
      CSS Custom Properties for results grid
      Scoped to component to avoid global conflicts
      ======================================================================== */
+
+  .life-list-indicator {
+    display: none;
+  }
+
+  .life-list-indicator.in-life-list {
+    display: block;
+  }
 
   .merlin-results-grid {
     --grid-cell-radius: 4px;

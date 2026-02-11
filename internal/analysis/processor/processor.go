@@ -415,6 +415,8 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *birdnet.BirdNET, m
 	if settings.Realtime.Dashboard.Spectrogram.IsPreRenderEnabled() {
 		p.initPreRenderer()
 	}
+	
+	loadLifeList(settings)
 
 	return p
 }
@@ -471,6 +473,7 @@ func (p *Processor) processDetections(item birdnet.Results) {
 				CommonName: det.Result.Species.CommonName,
 				ScientificName: det.Result.Species.ScientificName,
 				Confidence: det.Result.Confidence,
+				InLifeList: isInLifeList(det.Result.Species.ScientificName),
 			}
 		}
 		if err := merlinSSEBroadcaster(predictions); err != nil {

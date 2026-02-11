@@ -37,6 +37,7 @@ export interface SoundRecognition {
   commonName: string;
   scientificName: string;
   confidence: number;
+  inLifeList: boolean;
 };
 
 export interface ModelPredictions {
@@ -156,4 +157,5 @@ export interface MerlinSpeciesSummary {
   count: number;
   confidence: number;
   maxConfidence: number;
+  inLifeList: boolean;
 }
