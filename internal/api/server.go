@@ -290,7 +290,7 @@ func (s *Server) setupRoutes() error {
 		s.apiController.Processor = s.processor
 		// Connect SSE broadcaster for real-time detection streaming
 		s.processor.SetSSEBroadcaster(s.apiController.BroadcastDetection)
-		s.processor.SetMerlinSSEBroadcaster(s.apiController.BroadcastMerlin)
+		s.processor.SetSoundIdSseBroadcaster(s.apiController.BroadcastSoundId)
 		s.slogger.Debug("SSE broadcaster connected to processor")
 	}
 
@@ -464,7 +464,7 @@ func (s *Server) registerSPARoutes() {
 		"/ui/analytics/advanced",
 		"/ui/search",
 		"/ui/about",
-		"/ui/merlin",
+		"/ui/soundid",
 	}
 
 	// Public dynamic routes (with path parameters)

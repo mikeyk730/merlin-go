@@ -1,19 +1,19 @@
 <!--
-MerlinResultsGrid.svelte - Display detected birds in realtime
+SoundIdResultsGrid.svelte - Display detected birds in realtime
 
 Purpose:
 - Displays bird species
 
 Props:
-- data: MerlinSpeciesSummary[] - Array of species detection summaries
+- data: SoundIdRecord[] - Array of species detection summaries
 -->
 
 <script lang="ts">
-  import type { MerlinSpeciesSummary } from '$lib/types/detection.types';
+  import type { SoundIdRecord } from '$lib/types/detection.types';
   import MerlinThumbnail from './MerlinThumbnail.svelte';
 
   interface Props {
-    data: MerlinSpeciesSummary[];
+    data: SoundIdRecord[];
   }
 
   let {
@@ -31,7 +31,7 @@ Props:
 {/if}
 
 <div
-  class="merlin-results-grid sm:mb-4 max-w-[700px]"
+  class="sound-id-results-grid sm:mb-4 max-w-[700px]"
 >
   <!-- Species rows -->
   <div class="flex flex-col" style:gap="var(--grid-gap)">
@@ -81,7 +81,7 @@ Props:
     height: 1.37rem
   }
 
-  .merlin-results-grid {
+  .sound-id-results-grid {
     --grid-cell-radius: 4px;
     --grid-gap: 1px; /* Gap between grid cells */
   }

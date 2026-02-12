@@ -156,7 +156,7 @@ export interface DailySpeciesSummary {
   previousCount?: number; // For animated counter
 }
 
-export interface MerlinSpeciesSummary {
+export interface SoundIdRecord {
   common_name: string;
   scientific_name: string;
   count: number;

@@ -1,7 +1,7 @@
 <!--
 mdk:todo:
 -cache maping betwee lat,lon and city,state
--timer should only tick when merlin sse is connected
+-timer should only tick when soundid sse is connected
 -add rare/uncommon indicators
 -turn off spectrogram events when not on sound id page
 -3x higher res spectrogram
@@ -13,7 +13,7 @@ mdk:todo:
  -recombine thumbnail components
  -isModelPredictions
 
-MerlinPage.svelte - Main dashboard page with bird detection summaries
+SoundIdPage.svelte - Main dashboard page with bird detection summaries
 
 Purpose:
 - Central dashboard displaying daily species summaries and recent detections
@@ -34,9 +34,9 @@ Performance Optimizations:
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import ReconnectingEventSource from 'reconnecting-eventsource';
-  import MerlinResultsGrid from '$lib/desktop/features/dashboard/components/MerlinResultsGrid.svelte';
+  import SoundIdResultsGrid from '$lib/desktop/features/dashboard/components/SoundIdResultsGrid.svelte';
   import { t } from '$lib/i18n';
-  import type { MerlinSpeciesSummary, ModelPredictions, SoundRecognition, SoundIdConfig, BirdNETConfig } from '$lib/types/detection.types';
+  import type { SoundIdRecord, ModelPredictions, SoundRecognition, SoundIdConfig, BirdNETConfig } from '$lib/types/detection.types';
   import { getLogger } from '$lib/utils/logger';
   import { safeArrayAccess, isPlainObject } from '$lib/utils/security';
   import { api } from '$lib/utils/api';
@@ -66,7 +66,7 @@ Performance Optimizations:
   // State management
   let timer = $state(0);
   let location = $state({city: null, state: null});
-  let speciesSummary = $state<MerlinSpeciesSummary[]>([]);
+  let speciesSummary = $state<SoundIdRecord[]>([]);
   let birdSinging = $state({
         indicatorCount: 0,
         hearingCount: 0,
@@ -99,7 +99,7 @@ Performance Optimizations:
 
   // Connect to SSE stream for real-time updates using ReconnectingEventSource
   function connectToDetectionStream() {
-    logger.debug('Connecting to SSE stream at /api/v2/merlin/stream');
+    logger.debug('Connecting to SSE stream at /api/v2/soundid/stream');
 
     // Clean up existing connection
     if (eventSource) {
@@ -109,7 +109,7 @@ Performance Optimizations:
 
     try {
       // ReconnectingEventSource with configuration
-      eventSource = new ReconnectingEventSource('/api/v2/merlin/stream', {
+      eventSource = new ReconnectingEventSource('/api/v2/soundid/stream', {
         max_retry_time: 30000, // Max 30 seconds between reconnection attempts
         withCredentials: false,
       });
@@ -130,7 +130,7 @@ Performance Optimizations:
         }
       });
 
-      eventSource.addEventListener('merlin', (event: Event) => {
+      eventSource.addEventListener('soundid', (event: Event) => {
         try {
           // eslint-disable-next-line no-undef
           const messageEvent = event as MessageEvent;
@@ -545,7 +545,7 @@ Performance Optimizations:
       );
     } else {
       // Add new species
-      const newSpecies: MerlinSpeciesSummary = {
+      const newSpecies: SoundIdRecord = {
         common_name: detection.commonName,
         scientific_name: detection.scientificName,
         inLifeList: detection.inLifeList,
@@ -603,7 +603,7 @@ Performance Optimizations:
           </span>
         {/key}
       </div>
-      <MerlinResultsGrid
+      <SoundIdResultsGrid
         data={speciesSummary}
       />
     </div>

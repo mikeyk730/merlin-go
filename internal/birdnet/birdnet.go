@@ -38,7 +38,7 @@ type speciesCacheEntry struct {
 	scores map[string]float64 // Species occurrence scores keyed by label
 }
 
-type MerlinPrediction struct {
+type SoundIdPrediction struct {
 	CommonName         string                  `json:"commonName"`
 	ScientificName     string                  `json:"scientificName"`
 	Confidence         float64                 `json:"confidence"`

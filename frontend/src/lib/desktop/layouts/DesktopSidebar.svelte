@@ -168,7 +168,7 @@ Performance Optimizations:
     analyticsSpecies: actualRoute === '/ui/analytics/species',
     search: actualRoute.startsWith('/ui/search'),
     about: actualRoute.startsWith('/ui/about'),
-    merlin: actualRoute.startsWith('/ui/merlin'),
+    soundid: actualRoute.startsWith('/ui/soundid'),
     system: actualRoute.startsWith('/ui/system'),
     settings: actualRoute.startsWith('/ui/settings'),
     settingsMain: actualRoute === '/ui/settings/main',
@@ -206,7 +206,7 @@ Performance Optimizations:
     analyticsSpecies: onNavigate ? '/analytics/species' : '/ui/analytics/species',
     search: onNavigate ? '/search' : '/ui/search',
     about: onNavigate ? '/about' : '/ui/about',
-    merlin: onNavigate ? '/merlin' : '/ui/merlin',
+    soundid: onNavigate ? '/soundid' : '/ui/soundid',
     system: onNavigate ? '/system' : '/ui/system',
     settingsMain: onNavigate ? '/settings/main' : '/ui/settings/main',
     settingsAudio: onNavigate ? '/settings/audio' : '/ui/settings/audio',
@@ -349,22 +349,22 @@ Performance Optimizations:
           </button>
         </div>
 
-        <!-- Merlin -->
+        <!-- Sound ID -->
         <div class="relative">
           <button
-            onclick={() => navigate(navigationUrls.merlin)}
-            onmouseenter={e => isCollapsed && showTooltip(e, t('navigation.merlin'))}
+            onclick={() => navigate(navigationUrls.soundid)}
+            onmouseenter={e => isCollapsed && showTooltip(e, t('navigation.soundid'))}
             onmouseleave={hideTooltip}
             class={cn(
               menuItemBase,
               menuItemCollapsed,
-              routeCache.merlin ? menuItemActive : menuItemDefault
+              routeCache.soundid ? menuItemActive : menuItemDefault
             )}
             role="menuitem"
           >
             <Bird class="size-5 shrink-0" />
             {#if !isCollapsed}
-              <span>{t('navigation.merlin')}</span>
+              <span>{t('navigation.soundid')}</span>
             {/if}
           </button>
         </div>
