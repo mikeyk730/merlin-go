@@ -1,37 +1,23 @@
 <!--
-mdk:todo:
-features:
--add rare/uncommon indicators
--displayed species should decay over time (if haven't heard in 15, 30, 60 mins?)
--unlocked species should decay over time (more aggressive than above?)
--3x higher res spectrogram
-perf:
--cache maping betwee lat,lon and city,state
--timer should only tick when Sound ID SSE is connected
--turn off spectrogram events when not on sound id page
--threads for ui spectrogram
--use local thumbnails
-code cleanup:
--isModelPredictions
--docs
-
-SoundIdPage.svelte - Main dashboard page with bird detection summaries
+SoundIdPage.svelte - Main page for Sound ID
 
 Purpose:
-- Central dashboard displaying daily species summaries and recent detections
-- Provides real-time updates via Server-Sent Events (SSE)
+- Displays real-time detections with a UI that resembles Merlin Sound ID
 
 Features:
-- Real-time detection updates via SSE with animations
+- Real-time spectrogram display
+- Status bar that indicates when a bird is being detected
+- Grid of detected bird species
+  - Entries flash in yellow each time the species is detected
+  - The confidence level of the most recent detection is shown
 
 Props: None (Page component)
 
 State Management:
-- speciesSummary: Array of species detection summaries for the selected date
-
-Performance Optimizations:
-- Efficient animation cleanup with requestAnimationFrame
-- Map-based lookups for O(1) species updates
+- timer: Elapsed time since Sound ID started
+- location: The city and state corresponding to the user's location
+- speciesSummary: Array of detected species
+- birdSinging: Tracks the number of consecutive iterations with a bird detection
 -->
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
@@ -45,29 +31,9 @@ Performance Optimizations:
 
   const logger = getLogger('app');
 
-  function isModelPredictions(v: unknown): v is ModelPredictions {
-    if (!isPlainObject(v)) return false;
-    return true;
-    //const o = v as Record<string, unknown>;
-    //const dateOk = typeof o.Date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.Date);
-    //const timeOk = typeof o.Time === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(o.Time);
-    //return (
-    //  typeof o.ID === 'number' &&
-    //  typeof o.CommonName === 'string' &&
-    //  o.CommonName.length > 0 &&
-    //  typeof o.ScientificName === 'string' &&
-    //  o.ScientificName.length > 0 &&
-    //  typeof o.Confidence === 'number' &&
-    //  dateOk &&
-    //  timeOk &&
-    //  typeof o.scientificName === 'string' &&
-    //  o.scientificName.length > 0
-    //);
-  }
-
   // State management
   let timer = $state(0);
-  let location = $state({city: null, state: null});
+  let location = $state({city: '', state: ''});
   let speciesSummary = $state<SoundIdRecord[]>([]);
   let birdSinging = $state({
         indicatorCount: 0,
@@ -167,15 +133,7 @@ Performance Optimizations:
   }
 
   // Helper function to process SSE detection data
-  function handleSSEDetection(detectionData: unknown) {
-    if (!isModelPredictions(detectionData)) {
-      const keys =
-        typeof detectionData === 'object' && detectionData !== null
-          ? Object.keys(detectionData as Record<string, unknown>)
-          : [];
-      logger.warn('SSE detection payload missing required fields', { keys });
-      return;
-    }
+  function handleSSEDetection(detectionData: ModelPredictions) {
     try {
       handleNewPrediction(detectionData);
     } catch (error) {
@@ -294,21 +252,34 @@ Performance Optimizations:
     try {
       let settings = await api.get<BirdNETConfig>('/api/v2/settings/birdnet');
 
-      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${settings.latitude}&lon=${settings.longitude}&zoom=10`)
-        .then(response => response.json())
-        .then(data => {
-          location.city = data.name;
-        }).catch(error => {
-          logger.error('Error fetching location.city:', error);
-        });
+      let locationKey = settings.latitude + "_" + settings.longitude;
+      let cityKey = "location_" + locationKey + "_city";
+      let stateKey = "location_" + locationKey + "_state";
 
-      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${settings.latitude}&lon=${settings.longitude}&zoom=5`)
-        .then(response => response.json())
-        .then(data => {
-          location.state = data.name;
-        }).catch(error => {
-          logger.error('Error fetching locaation.state:', error);
-        });
+      location.city = localStorage.getItem(cityKey) || '';
+      location.state = localStorage.getItem(stateKey) || '';
+
+      if (!location.city) {
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${settings.latitude}&lon=${settings.longitude}&zoom=10`)
+          .then(response => response.json())
+          .then(data => {
+            location.city = data.name;
+            localStorage.setItem(cityKey, location.city);
+          }).catch(error => {
+            logger.error('Error fetching location.city:', error);
+          });
+      }
+
+      if (!location.state){
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${settings.latitude}&lon=${settings.longitude}&zoom=5`)
+          .then(response => response.json())
+          .then(data => {
+            location.state = data.name;
+            localStorage.setItem(stateKey, location.state);
+          }).catch(error => {
+            logger.error('Error fetching locaation.state:', error);
+          });
+      }
 
     } catch (error) {
       logger.error('Error fetching BirdNET config:', error);

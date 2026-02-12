@@ -16,6 +16,17 @@ Changes from upstream repo:
 - Allow separate labels to be used for the sound ID and range filter models
 - Show text instead of check mark when confidence is 100%
 
+## TODO
+features:
+-add rare/uncommon indicators
+-displayed species should decay over time (if haven't heard in 15, 30, 60 mins?)
+-unlocked species should decay over time (more aggressive than above?)
+-3x higher res spectrogram
+-timer should only tick when Sound ID SSE is connected
+perf:
+-turn off ui spectrogram generation when not on sound id page
+-threading for ui spectrogram
+-use local thumbnails
 
 # BirdNET-Go
 
