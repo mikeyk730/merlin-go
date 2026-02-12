@@ -802,7 +802,7 @@ func (c *Controller) BroadcastDetection(note *datastore.Note, birdImage *imagepr
 	return nil
 }
 
-// BroadcastSoundId is a helper method to broadcast merlin data from the controller
+// BroadcastSoundId is a helper method to broadcast Sound ID data from the controller
 func (c *Controller) BroadcastSoundId(predictions []birdnet.SoundIdPrediction) error {
 	if c.sseManager == nil {
 		return fmt.Errorf("SSE manager not initialized")
@@ -814,12 +814,12 @@ func (c *Controller) BroadcastSoundId(predictions []birdnet.SoundIdPrediction) e
 		return fmt.Errorf("predictions is nil")
 	}
 
-	merlin := SSESoundIdData{
+	soundId := SSESoundIdData{
 		Predictions: predictions,
 		Timestamp: time.Now(),
 	}
 
-	c.sseManager.BroadcastSoundId(&merlin)
+	c.sseManager.BroadcastSoundId(&soundId)
 	return nil
 }
 
