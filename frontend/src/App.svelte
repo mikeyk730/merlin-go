@@ -109,7 +109,7 @@
       component: 'detection-detail',
     },
     { route: 'about', page: 'about', titleKey: 'navigation.about', component: 'about' },
-    { route: 'soundid', page: 'soundid', titleKey: 'navigation.soundid', component: 'soundid' },
+    { route: 'sound-id', page: 'soundid', titleKey: 'navigation.soundId', component: 'sound-id' },
     { route: 'system', page: 'system', titleKey: 'navigation.system', component: 'system' },
     { route: 'settings', page: 'settings', titleKey: 'navigation.settings', component: 'settings' },
   ];
@@ -165,7 +165,7 @@
             About = module.default;
           }
           break;
-        case 'soundid':
+        case 'sound-id':
           if (!SoundId) {
             const module =
               await import('./lib/desktop/features/dashboard/pages/SoundIdPage.svelte');
@@ -267,7 +267,7 @@
     '/ui/search': findRouteConfig('search'),
     '/ui/detections': findRouteConfig('detections'),
     '/ui/about': findRouteConfig('about'),
-    '/ui/soundid': findRouteConfig('soundid'),
+    '/ui/soundid': findRouteConfig('sound-id'),
     '/ui/system': findRouteConfig('system'),
     '/ui/settings': findRouteConfig('settings'),
   });
@@ -477,7 +477,7 @@
       {@render renderRoute(Search)}
     {:else if currentRoute === 'about'}
       {@render renderRoute(About)}
-    {:else if currentRoute === 'soundid'}
+    {:else if currentRoute === 'sound-id'}
       {@render renderRoute(SoundId)}
     {:else if currentRoute === 'system'}
       {@render renderRoute(System)}

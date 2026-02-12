@@ -1,16 +1,19 @@
 <!--
 mdk:todo:
--cache maping betwee lat,lon and city,state
--timer should only tick when soundid sse is connected
+features:
 -add rare/uncommon indicators
--turn off spectrogram events when not on sound id page
--3x higher res spectrogram
--threads for ui spectrogram
 -displayed species should decay over time (if haven't heard in 15, 30, 60 mins?)
 -unlocked species should decay over time (more aggressive than above?)
+-3x higher res spectrogram
+perf:
+-cache maping betwee lat,lon and city,state
+-timer should only tick when Sound ID SSE is connected
+-turn off spectrogram events when not on sound id page
+-threads for ui spectrogram
 -use local thumbnails
--code cleanup
- -isModelPredictions
+code cleanup:
+-isModelPredictions
+-docs
 
 SoundIdPage.svelte - Main dashboard page with bird detection summaries
 

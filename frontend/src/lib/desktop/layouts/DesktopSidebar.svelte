@@ -168,7 +168,7 @@ Performance Optimizations:
     analyticsSpecies: actualRoute === '/ui/analytics/species',
     search: actualRoute.startsWith('/ui/search'),
     about: actualRoute.startsWith('/ui/about'),
-    soundid: actualRoute.startsWith('/ui/soundid'),
+    soundId: actualRoute.startsWith('/ui/soundid'),
     system: actualRoute.startsWith('/ui/system'),
     settings: actualRoute.startsWith('/ui/settings'),
     settingsMain: actualRoute === '/ui/settings/main',
@@ -206,7 +206,7 @@ Performance Optimizations:
     analyticsSpecies: onNavigate ? '/analytics/species' : '/ui/analytics/species',
     search: onNavigate ? '/search' : '/ui/search',
     about: onNavigate ? '/about' : '/ui/about',
-    soundid: onNavigate ? '/soundid' : '/ui/soundid',
+    soundId: onNavigate ? '/soundid' : '/ui/soundid',
     system: onNavigate ? '/system' : '/ui/system',
     settingsMain: onNavigate ? '/settings/main' : '/ui/settings/main',
     settingsAudio: onNavigate ? '/settings/audio' : '/ui/settings/audio',
@@ -352,19 +352,19 @@ Performance Optimizations:
         <!-- Sound ID -->
         <div class="relative">
           <button
-            onclick={() => navigate(navigationUrls.soundid)}
-            onmouseenter={e => isCollapsed && showTooltip(e, t('navigation.soundid'))}
+            onclick={() => navigate(navigationUrls.soundId)}
+            onmouseenter={e => isCollapsed && showTooltip(e, t('navigation.soundId'))}
             onmouseleave={hideTooltip}
             class={cn(
               menuItemBase,
               menuItemCollapsed,
-              routeCache.soundid ? menuItemActive : menuItemDefault
+              routeCache.soundId ? menuItemActive : menuItemDefault
             )}
             role="menuitem"
           >
             <Bird class="size-5 shrink-0" />
             {#if !isCollapsed}
-              <span>{t('navigation.soundid')}</span>
+              <span>{t('navigation.soundId')}</span>
             {/if}
           </button>
         </div>
