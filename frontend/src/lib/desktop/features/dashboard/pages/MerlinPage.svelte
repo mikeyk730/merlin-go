@@ -1,6 +1,6 @@
 <!--
 mdk:todo:
--decide where to put city, state
+-cache maping betwee lat,lon and city,state
 -timer should only tick when merlin sse is connected
 -add rare/uncommon indicators
 -turn off spectrogram events when not on sound id page
@@ -587,16 +587,18 @@ Performance Optimizations:
   <div class="card bg-base-100 sm:pt-8 sm:shadow-sm sm:rounded-2xl sm:border sm:border-border-100 overflow-visible inline-block">
     <div class="overflow-x-auto overflow-y-visible inline-block">
       <canvas id="spectrogram" class="w-full" width="700" height="257"></canvas>
-      <div id="singingBirdIndicator" class="flex flex-col">
+      <div id="status-bar" class="flex flex-col">
         {#key birdSinging.indicatorCount}
           <span class="text-xs p-1 flex items-center">
-            {#if location.city && location.state}
-              <span class="mx-1">{location.city}, {location.state}</span>
-            {/if}
             <span class="mx-1">{formatTime(timer)}</span>
-            <span class="ml-auto">
-              <span class="bird-indicator-text" class:bird-singing={birdSinging.hearingCount > 3}>Hearing a bird</span>
-              <span class="bird-indicator mx-1" class:bird-singing={birdSinging.indicatorCount > 0}>&#x25CF;</span>
+            {#if location.city && location.state}
+              <span class="location-container ml-auto" class:bird-singing={birdSinging.indicatorCount > 0}>
+                <span class="mx-1">{location.city}, {location.state}</span>
+              </span>
+            {/if}
+            <span class="bird-indicator-container ml-auto" class:bird-singing={birdSinging.indicatorCount > 0}>
+              <span class="bird-indicator-text" class:animate={birdSinging.hearingCount > 3}>Hearing a bird</span>
+              <span class="bird-indicator-dot mx-1" class:animate={birdSinging.indicatorCount > 0}>&#x25CF;</span>
             </span>
           </span>
         {/key}
@@ -609,26 +611,45 @@ Performance Optimizations:
 </section>
 
 <style>
-  #singingBirdIndicator
+  #status-bar
   {
     background-color: #f8f8f8;
   }
 
-  .bird-indicator, .bird-indicator-text
+  .location-container
   {
-    visibility: hidden;
+    display: block;
   }
 
-  .bird-indicator.bird-singing
+  .location-container.bird-singing
   {
-    visibility: visible;
+    display: none;
+  }
+
+  .bird-indicator-container
+  {
+    display: none;
+  }
+
+  .bird-indicator-container.bird-singing
+  {
+    display: block;
+  }
+
+  .bird-indicator-dot.animate
+  {
     animation: singingIndicatorAnimation 1.1s ease-out forwards;
   }
 
-  .bird-indicator-text.bird-singing
+  .bird-indicator-text
+  {
+    visibility: hidden;
+    text-transform: uppercase;
+  }
+
+  .bird-indicator-text.animate
   {
     visibility: visible;
-    text-transform: uppercase;
     animation: singingTextAnimation 1.1s ease-out forwards;
   }
 
