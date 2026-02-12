@@ -10,7 +10,7 @@ Props:
 
 <script lang="ts">
   import type { SoundIdRecord } from '$lib/types/detection.types';
-  import MerlinThumbnail from './MerlinThumbnail.svelte';
+  import BirdThumbnailPopup from './BirdThumbnailPopup.svelte';
 
   interface Props {
     data: SoundIdRecord[];
@@ -41,10 +41,11 @@ Props:
           <div class="w-full shrink-0 flex items-center gap-4 px-4 py-1">
 
             <!-- Species thumbnail -->
-            <MerlinThumbnail
+            <BirdThumbnailPopup
               thumbnailUrl={`/api/v2/media/species-image?name=${encodeURIComponent(item.scientific_name)}`}
               commonName={item.common_name}
-              scientificName={item.common_name}
+              scientificName={item.scientific_name}
+              largeThumbnails={true}
             />
 
             <!-- Species name -->

@@ -8,9 +8,8 @@ mdk:todo:
 -threads for ui spectrogram
 -displayed species should decay over time (if haven't heard in 15, 30, 60 mins?)
 -unlocked species should decay over time (more aggressive than above?)
--use merlin thumbnails
+-use local thumbnails
 -code cleanup
- -recombine thumbnail components
  -isModelPredictions
 
 SoundIdPage.svelte - Main dashboard page with bird detection summaries
