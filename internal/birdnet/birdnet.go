@@ -38,6 +38,7 @@ type speciesCacheEntry struct {
 	scores map[string]float64 // Species occurrence scores keyed by label
 }
 
+// todo:mdk this should live in a better place
 type SoundIdPrediction struct {
 	CommonName         string                  `json:"commonName"`
 	ScientificName     string                  `json:"scientificName"`
@@ -129,7 +130,7 @@ func NewBirdNET(settings *conf.Settings) (*BirdNET, error) {
 				Build()
 		}
 	}
-	
+
 	if err := bn.loadLabels(); err != nil {
 		return nil, errors.New(fmt.Errorf("BirdNET: failed to load species labels: %w", err)).
 			Component("birdnet").
@@ -433,7 +434,6 @@ func (bn *BirdNET) getSpectrogramModelData() ([]byte, error) {
 		Category(errors.CategoryModelLoad).
 		Build()
 }
-
 
 // initializeSpectrogramModel loads and initializes the spectrogram model.
 func (bn *BirdNET) initializeSpectrogramModel() error {
