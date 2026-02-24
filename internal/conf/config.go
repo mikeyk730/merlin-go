@@ -928,8 +928,18 @@ type BirdNETConfig struct {
 	UseXNNPACK  bool                `json:"useXnnpack"`                                     // true to use XNNPACK delegate for inference acceleration
 }
 
+type SoundIdConfig struct {
+	Enabled        			bool    `json:"enabled"`        		// true to enable Sound ID
+	UiModelPath 			string 	`json:"uiModelPath"` 			// path to external ui spectrogram model file
+	LifeListPath 			string 	`json:"lifelistPath"` 			// path to external life list CSV file
+	BirdSingingThreshold    float64	`json:"birdsingingthreshold"`	// minimum confidence that a bird is present. samples below this threshold will not be processed
+	InitialThreshold 		float64	`json:"initialthreshold"`       // threshold needed to display a bird for the first time
+	UnlockedThreshold   	float64	`json:"unlockedthreshold"`      // threshold needed to update a bird after it's been displayed
+	MinDetectionsToUnlock	int    	`json:"mindetectionstounlock"`  // number of consecutive detections needed to display a bird for the first time
+}
+
 type SpectrogramSettings struct {
-	ModelPath string `json:"modelPath"` // path to external spectrogram model file (empty for embedded)
+	ModelPath   string `json:"modelPath"`   // path to external spectrogram model file
 }
 
 // RangeFilterSettings contains settings for the range filter
@@ -1221,6 +1231,7 @@ type Settings struct {
 	} `json:"main"`
 
 	BirdNET BirdNETConfig `json:"birdnet"` // BirdNET configuration
+	SoundId SoundIdConfig `json:"soundId"` // SoundId configuration
 
 	Input InputConfig `yaml:"-" json:"-"` // Input configuration for file and directory analysis
 

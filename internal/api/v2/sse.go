@@ -13,6 +13,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/tphakala/birdnet-go/internal/birdnet"
 	"github.com/tphakala/birdnet-go/internal/datastore"
 	"github.com/tphakala/birdnet-go/internal/imageprovider"
 	"github.com/tphakala/birdnet-go/internal/logger"
@@ -30,10 +31,14 @@ const (
 
 	// Endpoints
 	detectionStreamEndpoint  = "/api/v2/detections/stream"
+	soundIdStreamEndpoint  = "/api/v2/soundid/stream"
+	spectrogramStreamEndpoint  = "/api/v2/spectrogram/stream"
 	soundLevelStreamEndpoint = "/api/v2/soundlevels/stream"
 
 	// Buffer sizes
 	sseDetectionBufferSize  = 100 // Buffer size for detection channels (high volume)
+	sseSoundIdBufferSize    = 100 // Buffer size for Sound ID channels (high volume)
+	sseSpectrogramBufferSize = 100 // Buffer size for spectrogram channels
 	sseSoundLevelBufferSize = 100 // Buffer size for sound level channels
 	sseMinimalBufferSize    = 1   // Minimal buffer for unused channels
 	sseDoneChannelBuffer    = 1   // Buffer for Done channels to prevent blocking
@@ -49,8 +54,10 @@ const (
 	// Note: StreamType="all" shares a single consecutiveDrops counter across both streams,
 	// meaning drops on one stream affect health tracking for both
 	streamTypeDetections  = "detections"
+	streamTypeSoundId     = "soundid"
+	streamTypeSpectrogram = "spectrogram"
 	streamTypeSoundLevels = "soundlevels"
-	streamTypeAll         = "all"
+	//streamTypeAll         = "all"
 )
 
 // WriteDeadlineSetter interface for response writers that support write deadlines
@@ -68,6 +75,18 @@ type SSEDetectionData struct {
 	DaysSinceFirstSeen int                     `json:"daysSinceFirstSeen,omitempty"` // Days since species was first detected
 }
 
+// SSESoundIdData represents the Sound ID data sent via SSE
+type SSESoundIdData struct {
+	Predictions        []birdnet.SoundIdPrediction   `json:"predictions"`
+	Timestamp          time.Time               		 `json:"timestamp"`
+}
+
+// SSEUiSpectrogramData represents spectrogram data sent via SSE
+type SSEUiSpectrogramData struct {
+	myaudio.UiSpectrogramData
+	EventType string `json:"eventType"`
+}
+
 // SSESoundLevelData represents sound level data sent via SSE
 type SSESoundLevelData struct {
 	myaudio.SoundLevelData
@@ -83,13 +102,15 @@ type SSEEvent struct {
 
 // SSEClient represents a connected SSE client
 type SSEClient struct {
-	ID             string
-	Channel        chan SSEDetectionData
-	SoundLevelChan chan SSESoundLevelData
-	Request        *http.Request
-	Response       http.ResponseWriter
-	Done           chan struct{} // Signal-only buffered channel to prevent blocking
-	StreamType     string        // streamTypeDetections, streamTypeSoundLevels, or streamTypeAll
+	ID              string
+	Channel         chan SSEDetectionData
+	SoundIdChan      chan SSESoundIdData
+	SpectrogramChan chan SSEUiSpectrogramData
+	SoundLevelChan  chan SSESoundLevelData
+	Request         *http.Request
+	Response        http.ResponseWriter
+	Done            chan struct{} // Signal-only buffered channel to prevent blocking
+	StreamType      string        // streamTypeDetections, streamTypeSoundId, streamTypeSpectrogram, or streamTypeSoundLevels
 
 	// Health tracking for auto-disconnect of slow/blocked clients
 	// Uses atomic operations for thread-safe access during concurrent broadcasts
@@ -125,9 +146,17 @@ func (m *SSEManager) RemoveClient(clientID string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	if client, exists := m.clients[clientID]; exists {
-		close(client.Channel)
+		if client.Channel != nil {
+			close(client.Channel)
+		}
 		if client.SoundLevelChan != nil {
 			close(client.SoundLevelChan)
+		}
+		if client.SoundIdChan != nil {
+			close(client.SoundIdChan)
+		}
+		if client.SpectrogramChan != nil {
+			close(client.SpectrogramChan)
 		}
 		close(client.Done)
 		delete(m.clients, clientID)
@@ -153,22 +182,124 @@ func (m *SSEManager) BroadcastDetection(detection *SSEDetectionData) {
 	var blockedClients []string
 
 	for clientID, client := range m.clients {
-		select {
-		case client.Channel <- *detection:
-			// Successfully sent to client - reset health counter atomically
-			client.consecutiveDrops.Store(0)
+		if client.StreamType == streamTypeDetections {
+			select {
+			case client.Channel <- *detection:
+				// Successfully sent to client - reset health counter atomically
+				client.consecutiveDrops.Store(0)
 
-		default:
-			// Channel full - drop this update, increment counter atomically
-			drops := client.consecutiveDrops.Add(1)
+			default:
+				// Channel full - drop this update, increment counter atomically
+				drops := client.consecutiveDrops.Add(1)
 
-			// Only log when reaching disconnect threshold to avoid log spam
-			if drops >= maxConsecutiveDrops {
-				GetLogger().Info("SSE client disconnected after consecutive drops",
-					logger.String("client_id", clientID),
-					logger.Int("consecutive_drops", int(drops)),
-				)
-				blockedClients = append(blockedClients, clientID)
+				// Only log when reaching disconnect threshold to avoid log spam
+				if drops >= maxConsecutiveDrops {
+					GetLogger().Info("SSE client disconnected after consecutive drops",
+						logger.String("client_id", clientID),
+						logger.String("channel", "detection"),
+						logger.Int("consecutive_drops", int(drops)),
+					)
+					blockedClients = append(blockedClients, clientID)
+				}
+			}
+		}
+	}
+
+	// Release the read lock before removing clients
+	m.mutex.RUnlock()
+
+	// Remove blocked clients synchronously (we're outside the lock and RemoveClient is fast)
+	// Note: Low probability race if client reconnects with same ID between unlock and removal
+	for _, clientID := range blockedClients {
+		m.RemoveClient(clientID)
+	}
+}
+
+// BroadcastSoundId sends Sound ID data to all connected clients
+// Uses non-blocking send to prevent slow clients from blocking fast clients.
+// Clients are automatically disconnected after maxConsecutiveDrops failed sends.
+func (m *SSEManager) BroadcastSoundId(soundId *SSESoundIdData) {
+	m.mutex.RLock()
+
+	if len(m.clients) == 0 {
+		m.mutex.RUnlock()
+		return // No clients to broadcast to
+	}
+
+	// Collect blocked client IDs to remove them after releasing the lock
+	var blockedClients []string
+
+	for clientID, client := range m.clients {
+		if client.StreamType == streamTypeSoundId {
+			select {
+			case client.SoundIdChan <- *soundId:
+				// Successfully sent to client - reset health counter atomically
+				client.consecutiveDrops.Store(0)
+
+			default:
+				// Channel full - drop this update, increment counter atomically
+				drops := client.consecutiveDrops.Add(1)
+
+				// Only log when reaching disconnect threshold to avoid log spam
+				if drops >= maxConsecutiveDrops {
+					GetLogger().Info("SSE client disconnected after consecutive drops",
+						logger.String("client_id", clientID),
+						logger.String("channel", "soundId"),
+						logger.Int("consecutive_drops", int(drops)),
+					)
+					blockedClients = append(blockedClients, clientID)
+				}
+			}
+		}
+	}
+
+	// Release the read lock before removing clients
+	m.mutex.RUnlock()
+
+	// Remove blocked clients synchronously (we're outside the lock and RemoveClient is fast)
+	// Note: Low probability race if client reconnects with same ID between unlock and removal
+	for _, clientID := range blockedClients {
+		m.RemoveClient(clientID)
+	}
+}
+
+// BroadcastUiSpectrogram sends spectrogram data to all connected clients
+// Uses non-blocking send to prevent slow clients from blocking fast clients.
+// Clients are automatically disconnected after maxConsecutiveDrops failed sends.
+func (m *SSEManager) BroadcastUiSpectrogram(uiSpectrogram *SSEUiSpectrogramData) {
+	m.mutex.RLock()
+
+	if len(m.clients) == 0 {
+		m.mutex.RUnlock()
+		return // No clients to broadcast to
+	}
+
+	// Collect blocked client IDs to remove them after releasing the lock
+	var blockedClients []string
+
+	for clientID, client := range m.clients {
+		// Only send to clients that want ui spectrogram data
+		if client.StreamType == streamTypeSpectrogram {
+			if client.SpectrogramChan != nil {
+				select {
+				case client.SpectrogramChan <- *uiSpectrogram:
+					// Successfully sent to client - reset health counter atomically
+					client.consecutiveDrops.Store(0)
+
+				default:
+					// Channel full - drop this update, increment counter atomically
+					drops := client.consecutiveDrops.Add(1)
+
+					// Only log when reaching disconnect threshold to avoid log spam
+					if drops >= maxConsecutiveDrops {
+						GetLogger().Info("SSE client disconnected after consecutive drops",
+							logger.String("client_id", clientID),
+							logger.String("channel", "ui_spectrogram"),
+							logger.Int("consecutive_drops", int(drops)),
+						)
+						blockedClients = append(blockedClients, clientID)
+					}
+				}
 			}
 		}
 	}
@@ -199,7 +330,7 @@ func (m *SSEManager) BroadcastSoundLevel(soundLevel *SSESoundLevelData) {
 
 	for clientID, client := range m.clients {
 		// Only send to clients that want sound level data
-		if client.StreamType == streamTypeSoundLevels || client.StreamType == streamTypeAll {
+		if client.StreamType == streamTypeSoundLevels {
 			if client.SoundLevelChan != nil {
 				select {
 				case client.SoundLevelChan <- *soundLevel:
@@ -214,6 +345,7 @@ func (m *SSEManager) BroadcastSoundLevel(soundLevel *SSESoundLevelData) {
 					if drops >= maxConsecutiveDrops {
 						GetLogger().Info("SSE client disconnected after consecutive drops",
 							logger.String("client_id", clientID),
+							logger.String("channel", "soundlevel"),
 							logger.Int("consecutive_drops", int(drops)),
 						)
 						blockedClients = append(blockedClients, clientID)
@@ -271,6 +403,11 @@ func (c *Controller) initSSERoutes() {
 	// SSE endpoint for detection stream with rate limiting
 	c.Group.GET("/detections/stream", c.StreamDetections, middleware.RateLimiterWithConfig(rateLimiterConfig))
 
+	// SSE endpoint for Sound ID detection stream
+	c.Group.GET("/soundid/stream", c.StreamSoundId) //, middleware.RateLimiterWithConfig(rateLimiterConfig))
+
+	c.Group.GET("/spectrogram/stream", c.StreamSpectrogram) //, middleware.RateLimiterWithConfig(rateLimiterConfig))
+	
 	// SSE endpoint for sound level stream with rate limiting
 	c.Group.GET("/soundlevels/stream", c.StreamSoundLevels, middleware.RateLimiterWithConfig(rateLimiterConfig))
 
@@ -354,6 +491,10 @@ func (c *Controller) handleSSEStream(ctx echo.Context, streamType, message, logP
 	switch streamType {
 	case streamTypeDetections:
 		endpoint = detectionStreamEndpoint
+	case streamTypeSoundId:
+		endpoint = soundIdStreamEndpoint
+	case streamTypeSpectrogram:
+		endpoint = spectrogramStreamEndpoint
 	case streamTypeSoundLevels:
 		endpoint = soundLevelStreamEndpoint
 	}
@@ -435,6 +576,57 @@ func (c *Controller) StreamDetections(ctx echo.Context) error {
 				},
 				"detection",
 				"",
+			)
+		})
+}
+
+// StreamSoundId handles the SSE connection for real-time Sound ID streaming
+func (c *Controller) StreamSoundId(ctx echo.Context) error {
+	return c.handleSSEStream(ctx, streamTypeSoundId, "Connected to Sound ID stream", "soundid",
+		func(client *SSEClient) {
+			client.SoundIdChan = make(chan SSESoundIdData, sseSoundIdBufferSize) // Buffer for high volume periods
+		},
+		func(ctx echo.Context, client *SSEClient, clientID string) error {
+			return c.runSSEEventLoop(ctx, client, clientID, soundIdStreamEndpoint,
+				func() (any, bool) {
+					select {
+					case soundid, ok := <-client.SoundIdChan:
+						if !ok {
+							return nil, false // Channel closed, no more data
+						}
+						return soundid, true
+					default:
+						return nil, false
+					}
+				},
+				"soundid",
+				"",
+			)
+		})
+}
+
+// StreamSpectrogram handles the SSE connection for real-time spectrogram streaming
+func (c *Controller) StreamSpectrogram(ctx echo.Context) error {
+	return c.handleSSEStream(ctx, streamTypeSpectrogram, "Connected to spectrogram stream", "ui_spectrogram",
+		func(client *SSEClient) {
+			client.Channel = make(chan SSEDetectionData, sseMinimalBufferSize)            // Minimal buffer, not used for spectrograms
+			client.SpectrogramChan = make(chan SSEUiSpectrogramData, sseSpectrogramBufferSize) // Buffer for ui spectrogram data
+		},
+		func(ctx echo.Context, client *SSEClient, clientID string) error {
+			return c.runSSEEventLoop(ctx, client, clientID, spectrogramStreamEndpoint,
+				func() (any, bool) {
+					select {
+					case uiSpectrogram, ok := <-client.SpectrogramChan:
+						if !ok {
+							return nil, false // Channel closed, no more data
+						}
+						return uiSpectrogram, true
+					default:
+						return nil, false
+					}
+				},
+				"ui_spectrogram",
+				streamTypeSpectrogram,
 			)
 		})
 }
@@ -607,6 +799,48 @@ func (c *Controller) BroadcastDetection(note *datastore.Note, birdImage *imagepr
 	}
 
 	c.sseManager.BroadcastDetection(&detection)
+	return nil
+}
+
+// BroadcastSoundId is a helper method to broadcast Sound ID data from the controller
+func (c *Controller) BroadcastSoundId(predictions []birdnet.SoundIdPrediction) error {
+	if c.sseManager == nil {
+		return fmt.Errorf("SSE manager not initialized")
+	}
+
+	// Add nil checks to prevent panic
+	if predictions == nil {
+		c.logErrorIfEnabled("SSE broadcast skipped: predictions is nil")
+		return fmt.Errorf("predictions is nil")
+	}
+
+	soundId := SSESoundIdData{
+		Predictions: predictions,
+		Timestamp: time.Now(),
+	}
+
+	c.sseManager.BroadcastSoundId(&soundId)
+	return nil
+}
+
+// BroadcastSpectrogram is a helper method to broadcast spectrogram data from the controller
+func (c *Controller) BroadcastSpectrogram(uiSpectrogram *myaudio.UiSpectrogramData) error {
+	if c.sseManager == nil {
+		return fmt.Errorf("SSE manager not initialized")
+	}
+
+	// Add nil check to prevent panic
+	if uiSpectrogram == nil {
+		c.logErrorIfEnabled("SSE broadcast skipped: uiSpectrogram is nil")
+		return fmt.Errorf("uiSpectrogram is nil")
+	}
+
+	sseData := SSEUiSpectrogramData{
+		UiSpectrogramData: *uiSpectrogram,
+		EventType:      "ui_spectrogram",
+	}
+
+	c.sseManager.BroadcastUiSpectrogram(&sseData)
 	return nil
 }
 

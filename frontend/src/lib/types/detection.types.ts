@@ -131,3 +131,36 @@ export interface DailySpeciesSummary {
   hourlyUpdated?: number[]; // Which hours were just updated
   previousCount?: number; // For animated counter
 }
+
+export interface BirdNETConfig {
+  latitude: number;
+  longitude: number;
+};
+
+export interface SoundIdConfig {
+  birdsingingthreshold: number;
+  initialthreshold: number;
+  unlockedthreshold: number;
+  mindetectionstounlock: number;
+};
+
+export interface SoundIdRecognition {
+  commonName: string;
+  scientificName: string;
+  confidence: number;
+  inLifeList: boolean;
+};
+
+export interface SoundIdPredictions {
+  predictions: SoundIdRecognition[];
+  datetime: string; // YYYY-MM-DD
+};
+
+export interface SoundIdSummary {
+  common_name: string;
+  scientific_name: string;
+  count: number;
+  confidence: number;
+  maxConfidence: number;
+  inLifeList: boolean;
+}

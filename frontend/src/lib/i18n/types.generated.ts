@@ -173,6 +173,7 @@ export type TranslationKey =
   | 'pageTitle.detectionDetails'
   | 'pageTitle.settingsNotAvailable'
   | 'navigation.dashboard'
+  | 'navigation.soundId'
   | 'navigation.detections'
   | 'navigation.search'
   | 'navigation.analytics'

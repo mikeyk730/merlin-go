@@ -85,6 +85,7 @@ type Processor struct {
 	preRendererOnce     sync.Once          // Ensures pre-renderer is initialized only once
 	// SSE related fields
 	SSEBroadcaster      func(note *datastore.Note, birdImage *imageprovider.BirdImage) error // Function to broadcast detection via SSE
+	soundIdSseBroadcaster func([]birdnet.SoundIdPrediction) error                            // Function to broadcast Sound ID via SSE
 	sseBroadcasterMutex sync.RWMutex                                                         // Mutex to protect SSE broadcaster access
 
 	// Backup system fields (optional)
@@ -414,7 +415,13 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *birdnet.BirdNET, m
 	if settings.Realtime.Dashboard.Spectrogram.IsPreRenderEnabled() {
 		p.initPreRenderer()
 	}
-
+	
+	if err := loadLifeList(settings); err != nil {
+		GetLogger().Error("Failed to load life list",
+			logger.String("component", "analysis.processor"),
+			logger.Error(err))
+	}
+	
 	return p
 }
 
@@ -459,7 +466,26 @@ func (p *Processor) processDetections(item birdnet.Results) {
 	// processResults() returns a slice of detections, we iterate through each and process them
 	// detections are put into pendingDetections map where they are held until flush deadline is reached
 	// once deadline is reached detections are delivered to workers for actions (save to db etc) processing
-	detectionResults := p.processResults(item)
+	detectionResults, soundIdResults := p.processResults(item)
+	
+	if soundIdSseBroadcaster := p.GetSoundIdSseBroadcaster(); soundIdSseBroadcaster != nil {
+		predictions := make([]birdnet.SoundIdPrediction, len(soundIdResults))
+		for i := range soundIdResults {
+			det := soundIdResults[i]
+			predictions[i] = birdnet.SoundIdPrediction{
+				CommonName: det.Result.Species.CommonName,
+				ScientificName: det.Result.Species.ScientificName,
+				Confidence: det.Result.Confidence,
+				InLifeList: isInLifeList(det.Result.Species.ScientificName),
+			}
+		}
+		if err := soundIdSseBroadcaster(predictions); err != nil {
+			GetLogger().Error("Failed to broadcast via SSE",
+				logger.String("component", "analysis.processor.actions"),
+				logger.Error(err),
+				logger.String("operation", "sse_broadcast"))
+		}
+	}
 
 	// Log processing results with deduplication to prevent spam
 	p.logDetectionResults(item.Source.ID, len(item.Results), len(detectionResults))
@@ -522,9 +548,10 @@ func (p *Processor) processDetections(item birdnet.Results) {
 // processResults processes the results from the BirdNET prediction and returns a list of detections.
 //
 //nolint:gocritic // hugeParam: Pass by value is intentional - avoids pointer dereferencing in hot path
-func (p *Processor) processResults(item birdnet.Results) []Detections {
+func (p *Processor) processResults(item birdnet.Results) ([]Detections, []Detections) {
 	// Pre-allocate slice with capacity for all results
 	detections := make([]Detections, 0, len(item.Results))
+	soundIdDetections := make([]Detections, 0, len(item.Results))
 
 	// Collect processing time metric
 	if p.Settings.Realtime.Telemetry.Enabled && p.Metrics != nil && p.Metrics.BirdNET != nil {
@@ -563,16 +590,22 @@ func (p *Processor) processResults(item birdnet.Results) []Detections {
 
 		// Check if detection should be filtered
 		shouldSkip, _ := p.shouldFilterDetection(result, commonName, scientificName, speciesLowercase, baseThreshold, item.Source.ID)
-		if shouldSkip {
+		shouldSkipSoundId := p.shouldFilterDetectionForSoundId(result)
+		if shouldSkip && shouldSkipSoundId {
 			continue
 		}
 
 		// Create the detection
 		det := p.createDetection(item, result, scientificName, commonName, speciesCode)
-		detections = append(detections, det)
+		if !shouldSkip {
+			detections = append(detections, det)
+		}
+		if !shouldSkipSoundId {
+			soundIdDetections = append(soundIdDetections, det)
+		}
 	}
 
-	return detections
+	return detections, soundIdDetections
 }
 
 // parseAndValidateSpecies parses species information and validates it
@@ -633,7 +666,7 @@ func (p *Processor) shouldFilterDetection(result datastore.Results, commonName, 
 	}
 
 	// Check confidence threshold
-	if result.Confidence <= confidenceThreshold {
+	if result.Confidence < confidenceThreshold {
 		if p.Settings.Debug {
 			GetLogger().Debug("Detection filtered out due to low confidence",
 				logger.String("species", result.Species),
@@ -657,6 +690,40 @@ func (p *Processor) shouldFilterDetection(result datastore.Results, commonName, 
 	}
 
 	return false, confidenceThreshold
+}
+
+// shouldFilterDetectionForSoundId checks if a detection should be filtered out
+func (p *Processor) shouldFilterDetectionForSoundId(result datastore.Results) (shouldFilter bool) {
+	confidenceThreshold := float32(p.Settings.SoundId.UnlockedThreshold)
+	
+	// Check confidence threshold
+	if result.Confidence < confidenceThreshold {
+		if p.Settings.Debug {
+			GetLogger().Debug("Sound ID detection filtered out due to low confidence",
+				logger.String("species", result.Species),
+				logger.Float32("confidence", result.Confidence),
+				logger.Float32("threshold", confidenceThreshold),
+				logger.String("operation", "sound_id_confidence_filter"))
+		}
+		return true
+	}
+
+	if result.Species == "Aves sp._bird sp._bird1" {
+		return false
+	}
+	
+	// Check species inclusion filter
+	if !p.Settings.IsSpeciesIncluded(result.Species) {
+		if p.Settings.Debug {
+			GetLogger().Debug("species not on included list",
+				logger.String("species", result.Species),
+				logger.Float32("confidence", result.Confidence),
+				logger.String("operation", "sound_id_species_inclusion_filter"))
+		}
+		return true
+	}
+
+	return false
 }
 
 // createDetection creates a detection object with all necessary information
@@ -1539,6 +1606,20 @@ func (p *Processor) GetSSEBroadcaster() func(note *datastore.Note, birdImage *im
 	p.sseBroadcasterMutex.RLock()
 	defer p.sseBroadcasterMutex.RUnlock()
 	return p.SSEBroadcaster
+}
+
+// SetSoundIdSseBroadcaster safely sets the Sound ID SSE broadcaster function
+func (p *Processor) SetSoundIdSseBroadcaster(broadcaster func(predictions []birdnet.SoundIdPrediction) error) {
+	p.sseBroadcasterMutex.Lock()
+	defer p.sseBroadcasterMutex.Unlock()
+	p.soundIdSseBroadcaster = broadcaster
+}
+
+// GetSoundIdSseBroadcaster safely returns the current Sound ID SSE broadcaster function
+func (p *Processor) GetSoundIdSseBroadcaster() func(predictions []birdnet.SoundIdPrediction) error {
+	p.sseBroadcasterMutex.RLock()
+	defer p.sseBroadcasterMutex.RUnlock()
+	return p.soundIdSseBroadcaster
 }
 
 // SetBackupManager safely sets the backup manager

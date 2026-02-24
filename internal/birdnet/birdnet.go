@@ -38,6 +38,14 @@ type speciesCacheEntry struct {
 	scores map[string]float64 // Species occurrence scores keyed by label
 }
 
+// todo:mdk this should live in a better place
+type SoundIdPrediction struct {
+	CommonName         string                  `json:"commonName"`
+	ScientificName     string                  `json:"scientificName"`
+	Confidence         float64                 `json:"confidence"`
+	InLifeList		   bool                    `json:"inLifeList"`
+}
+
 // BirdNET struct represents the BirdNET model with interpreters and configuration.
 type BirdNET struct {
 	AnalysisInterpreter    *tflite.Interpreter

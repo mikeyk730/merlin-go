@@ -61,6 +61,7 @@ type Server struct {
 	// Channels
 	controlChan    chan string
 	audioLevelChan chan myaudio.AudioLevelData
+	spectrogramChan chan myaudio.UiSpectrogramData
 
 	// API controller
 	apiController *apiv2.Controller
@@ -129,6 +130,13 @@ func WithControlChannel(ch chan string) ServerOption {
 func WithAudioLevelChannel(ch chan myaudio.AudioLevelData) ServerOption {
 	return func(s *Server) {
 		s.audioLevelChan = ch
+	}
+}
+
+// WithSpectrogramChannel sets the spectrogram channel for SSE streaming.
+func WithSpectrogramChannel(ch chan myaudio.UiSpectrogramData) ServerOption {
+	return func(s *Server) {
+		s.spectrogramChan = ch
 	}
 }
 
@@ -282,6 +290,7 @@ func (s *Server) setupRoutes() error {
 		s.apiController.Processor = s.processor
 		// Connect SSE broadcaster for real-time detection streaming
 		s.processor.SetSSEBroadcaster(s.apiController.BroadcastDetection)
+		s.processor.SetSoundIdSseBroadcaster(s.apiController.BroadcastSoundId)
 		s.slogger.Debug("SSE broadcaster connected to processor")
 	}
 
@@ -455,6 +464,7 @@ func (s *Server) registerSPARoutes() {
 		"/ui/analytics/advanced",
 		"/ui/search",
 		"/ui/about",
+		"/ui/soundid",
 	}
 
 	// Public dynamic routes (with path parameters)

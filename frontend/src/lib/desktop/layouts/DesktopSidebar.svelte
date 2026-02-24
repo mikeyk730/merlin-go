@@ -49,6 +49,7 @@ Performance Optimizations:
     BarChart3,
     Search,
     Info,
+    Bird,
     Cpu,
     Settings,
     LogOut,
@@ -167,6 +168,7 @@ Performance Optimizations:
     analyticsSpecies: actualRoute === '/ui/analytics/species',
     search: actualRoute.startsWith('/ui/search'),
     about: actualRoute.startsWith('/ui/about'),
+    soundId: actualRoute.startsWith('/ui/soundid'),
     system: actualRoute.startsWith('/ui/system'),
     settings: actualRoute.startsWith('/ui/settings'),
     settingsMain: actualRoute === '/ui/settings/main',
@@ -204,6 +206,7 @@ Performance Optimizations:
     analyticsSpecies: onNavigate ? '/analytics/species' : '/ui/analytics/species',
     search: onNavigate ? '/search' : '/ui/search',
     about: onNavigate ? '/about' : '/ui/about',
+    soundId: onNavigate ? '/soundid' : '/ui/soundid',
     system: onNavigate ? '/system' : '/ui/system',
     settingsMain: onNavigate ? '/settings/main' : '/ui/settings/main',
     settingsAudio: onNavigate ? '/settings/audio' : '/ui/settings/audio',
@@ -294,7 +297,7 @@ Performance Optimizations:
         >
           <LogoBadge size="md" variant="ocean" />
           {#if !isCollapsed}
-            <span class="text-xl font-bold tracking-tight text-base-content">BirdNET-Go</span>
+            <span class="text-xl font-bold tracking-tight text-base-content">Merlin-Go</span>
           {/if}
         </button>
         <!-- Collapse toggle - desktop only -->
@@ -342,6 +345,26 @@ Performance Optimizations:
             <LayoutDashboard class="size-5 shrink-0" />
             {#if !isCollapsed}
               <span>{t('navigation.dashboard')}</span>
+            {/if}
+          </button>
+        </div>
+
+        <!-- Sound ID -->
+        <div class="relative">
+          <button
+            onclick={() => navigate(navigationUrls.soundId)}
+            onmouseenter={e => isCollapsed && showTooltip(e, t('navigation.soundId'))}
+            onmouseleave={hideTooltip}
+            class={cn(
+              menuItemBase,
+              menuItemCollapsed,
+              routeCache.soundId ? menuItemActive : menuItemDefault
+            )}
+            role="menuitem"
+          >
+            <Bird class="size-5 shrink-0" />
+            {#if !isCollapsed}
+              <span>{t('navigation.soundId')}</span>
             {/if}
           </button>
         </div>
@@ -474,26 +497,6 @@ Performance Optimizations:
             <Search class="size-5 shrink-0" />
             {#if !isCollapsed}
               <span>{t('navigation.search')}</span>
-            {/if}
-          </button>
-        </div>
-
-        <!-- About -->
-        <div class="relative">
-          <button
-            onclick={() => navigate(navigationUrls.about)}
-            onmouseenter={e => isCollapsed && showTooltip(e, t('navigation.about'))}
-            onmouseleave={hideTooltip}
-            class={cn(
-              menuItemBase,
-              menuItemCollapsed,
-              routeCache.about ? menuItemActive : menuItemDefault
-            )}
-            role="menuitem"
-          >
-            <Info class="size-5 shrink-0" />
-            {#if !isCollapsed}
-              <span>{t('navigation.about')}</span>
             {/if}
           </button>
         </div>

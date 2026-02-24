@@ -1,5 +1,7 @@
 bin/birdnet-go
 bin/birdnet-go.exe
+bin/merlin-go
+bin/merlin-go.exe
 assets/tailwind.css
 log/
 clips/

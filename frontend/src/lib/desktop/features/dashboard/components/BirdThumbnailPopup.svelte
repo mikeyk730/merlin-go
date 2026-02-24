@@ -33,11 +33,15 @@
     thumbnailUrl: string;
     commonName: string;
     scientificName: string;
-    detectionUrl: string;
+    detectionUrl?: string;
     className?: string;
+    largeThumbnails?: boolean;
   }
 
-  let { thumbnailUrl, commonName, scientificName, detectionUrl, className = '' }: Props = $props();
+  let {
+    thumbnailUrl, commonName, scientificName, detectionUrl, className = '',
+    largeThumbnails = false,
+  }: Props = $props();
 
   // State for popup visibility and positioning
   let showPopup = $state(false);
@@ -173,11 +177,22 @@
     aria-describedby={showPopup ? 'bird-popup' : undefined}
   >
     <!-- Thumbnail placeholder -->
-    <div class="thumbnail-placeholder w-8 h-7 rounded-sm bg-base-200"></div>
+    <div
+      class="thumbnail-placeholder rounded-sm bg-base-200"
+      class:w-8={!largeThumbnails}
+      class:h-7={!largeThumbnails}
+      class:w-18={largeThumbnails}
+      class:h-12={largeThumbnails}
+    >
+    </div>
     <img
       src={thumbnailUrl}
       alt={commonName}
-      class="thumbnail-image w-8 h-7 rounded-sm object-cover cursor-pointer hover:opacity-80 transition-opacity"
+      class="thumbnail-image rounded-sm object-cover cursor-pointer hover:opacity-80 transition-opacity"
+      class:w-8={!largeThumbnails}
+      class:h-7={!largeThumbnails}
+      class:w-18={largeThumbnails}
+      class:h-12={largeThumbnails}
       onerror={handleImageError}
       loading="lazy"
     />
@@ -243,6 +258,7 @@
             {/if}
           </div>
 
+        {#if detectionUrl}
           <!-- Action hint -->
           <div class="text-center">
             <p
@@ -252,6 +268,7 @@
               Click to view detections
             </p>
           </div>
+        {/if}
         </div>
 
         <!-- Popup arrow pointing to trigger -->

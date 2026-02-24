@@ -79,6 +79,7 @@ type Controller struct {
 	// Audio level channel for SSE streaming
 	// TODO: Consider moving to a dedicated audio manager
 	audioLevelChan chan myaudio.AudioLevelData
+	spectrogramChan chan myaudio.UiSpectrogramData
 
 	// Test synchronization fields (only populated when initializeRoutes is true)
 	// goroutinesStarted signals when all background goroutines have successfully started.

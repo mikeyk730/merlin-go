@@ -247,6 +247,7 @@ func extractPredictions(tensor *tflite.Tensor) []float32 {
 	predSize := tensor.Dim(tensor.NumDims() - 1)
 	predictions := make([]float32, predSize)
 	copy(predictions, tensor.Float32s())
+	
 	return predictions
 }
 

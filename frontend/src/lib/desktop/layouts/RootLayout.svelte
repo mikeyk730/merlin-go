@@ -124,11 +124,11 @@
     </div>
 
     <!-- Main content -->
-    <main class="min-h-screen">
+    <main>
       <div class="mx-auto max-w-7xl">
         <div
           id="mainContent"
-          class="grid grid-cols-12 grid-rows-[min-content] gap-y-8 p-3 pt-0 lg:p-8 lg:pt-0"
+          class="grid grid-cols-12 grid-rows-[min-content] gap-y-8 sm:p-3 pt-0 lg:p-8 lg:pt-0"
         >
           {#if children}
             {@render children()}

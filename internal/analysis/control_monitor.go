@@ -29,6 +29,7 @@ type ControlMonitor struct {
 	bufferManager  *BufferManager
 	proc           *processor.Processor
 	audioLevelChan chan myaudio.AudioLevelData
+	spectrogramChan chan myaudio.UiSpectrogramData
 	soundLevelChan chan myaudio.SoundLevelData
 	bn             *birdnet.BirdNET
 	apiController  *apiv2.Controller
@@ -41,6 +42,9 @@ type ControlMonitor struct {
 
 	// Sound level manager for lifecycle management
 	soundLevelManager *SoundLevelManager
+	
+	// UI spectrogram manager for lifecycle management
+	uiSpectrogramManager *UiSpectrogramManager	
 
 	// Track telemetry endpoint
 	telemetryEndpoint      *observability.Endpoint
@@ -51,7 +55,7 @@ type ControlMonitor struct {
 }
 
 // NewControlMonitor creates a new ControlMonitor instance
-func NewControlMonitor(wg *sync.WaitGroup, controlChan chan string, quitChan, restartChan chan struct{}, bufferManager *BufferManager, proc *processor.Processor, audioLevelChan chan myaudio.AudioLevelData, soundLevelChan chan myaudio.SoundLevelData, apiController *apiv2.Controller, metrics *observability.Metrics) *ControlMonitor {
+func NewControlMonitor(wg *sync.WaitGroup, controlChan chan string, quitChan, restartChan chan struct{}, bufferManager *BufferManager, proc *processor.Processor, audioLevelChan chan myaudio.AudioLevelData, spectrogramChan chan myaudio.UiSpectrogramData, soundLevelChan chan myaudio.SoundLevelData, apiController *apiv2.Controller, metrics *observability.Metrics) *ControlMonitor {
 	cm := &ControlMonitor{
 		wg:             wg,
 		controlChan:    controlChan,
@@ -59,6 +63,7 @@ func NewControlMonitor(wg *sync.WaitGroup, controlChan chan string, quitChan, re
 		restartChan:    restartChan,
 		bufferManager:  bufferManager,
 		audioLevelChan: audioLevelChan,
+		spectrogramChan: spectrogramChan,
 		soundLevelChan: soundLevelChan,
 		proc:           proc,
 		bn:             proc.Bn,
@@ -78,7 +83,10 @@ func (cm *ControlMonitor) Start() {
 
 	// Initialize sound level monitoring if enabled
 	cm.initializeSoundLevelIfEnabled()
-
+	
+	// Initialize UI spectrogram generation if enabled
+	cm.initializeUiSpectrogramIfEnabled()
+	
 	go cm.monitor()
 }
 
@@ -87,6 +95,10 @@ func (cm *ControlMonitor) Stop() {
 	// Stop sound level monitoring if running
 	if cm.soundLevelManager != nil {
 		cm.soundLevelManager.Stop()
+	}
+	
+	if cm.uiSpectrogramManager != nil {
+		cm.uiSpectrogramManager.Stop()
 	}
 
 	// Stop telemetry endpoint if running
@@ -112,6 +124,24 @@ func (cm *ControlMonitor) initializeSoundLevelIfEnabled() {
 		// Start sound level monitoring
 		if err := cm.soundLevelManager.Start(); err != nil {
 			GetLogger().Warn("Failed to start sound level monitoring", logger.Error(err))
+		}
+	}
+}
+
+// initializeUiSpectrogramIfEnabled starts UI spectrogram generation if it's enabled in settings
+func (cm *ControlMonitor) initializeUiSpectrogramIfEnabled() {
+	settings := conf.Setting()
+	if settings.SoundId.Enabled {
+		// Initialize the UI spectrogram manager
+		if cm.uiSpectrogramManager == nil {
+			cm.uiSpectrogramManager = NewUiSpectrogramManager(cm.spectrogramChan, cm.proc, cm.apiController, cm.metrics)
+		}
+
+		GetLogger().Info("starting UI spectrogram generation")
+		
+		// Start UI spectrogram generation
+		if err := cm.uiSpectrogramManager.Start(); err != nil {
+			GetLogger().Warn("Failed to start UI spectrogram generation", logger.Error(err))
 		}
 	}
 }
@@ -376,6 +406,12 @@ func (cm *ControlMonitor) handleReconfigureStreams() {
 					// Channel full, drop data
 				}
 
+				select {
+				case cm.spectrogramChan <- unifiedData.SpectrogramData:
+				default:
+					// Channel full, drop data
+				}				
+				
 				// Send sound level data to existing sound level channel if present
 				if unifiedData.SoundLevel != nil {
 					select {

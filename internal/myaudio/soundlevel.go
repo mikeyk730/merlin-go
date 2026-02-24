@@ -12,6 +12,10 @@ import (
 	"github.com/tphakala/birdnet-go/internal/logger"
 )
 
+type UiSpectrogramData struct {
+	Spectrogram []byte 		`json:"spectrogram"`
+}
+
 // OctaveBandData represents sound level statistics for a single 1/3rd octave band
 type OctaveBandData struct {
 	CenterFreq  float64 `json:"center_frequency_hz"`
