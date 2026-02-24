@@ -85,7 +85,7 @@ type Processor struct {
 	preRendererOnce     sync.Once          // Ensures pre-renderer is initialized only once
 	// SSE related fields
 	SSEBroadcaster      func(note *datastore.Note, birdImage *imageprovider.BirdImage) error // Function to broadcast detection via SSE
-	soundIdSseBroadcaster func([]birdnet.SoundIdPrediction) error // Function to broadcast Sound ID via SSE
+	soundIdSseBroadcaster func([]birdnet.SoundIdPrediction) error                            // Function to broadcast Sound ID via SSE
 	sseBroadcasterMutex sync.RWMutex                                                         // Mutex to protect SSE broadcaster access
 
 	// Backup system fields (optional)
@@ -416,8 +416,12 @@ func New(settings *conf.Settings, ds datastore.Interface, bn *birdnet.BirdNET, m
 		p.initPreRenderer()
 	}
 	
-	loadLifeList(settings)
-
+	if err := loadLifeList(settings); err != nil {
+		GetLogger().Error("Failed to load life list",
+			logger.String("component", "analysis.processor"),
+			logger.Error(err))
+	}
+	
 	return p
 }
 
@@ -450,7 +454,7 @@ func (p *Processor) processDetections(item birdnet.Results) {
 		logger.Int("results_count", len(item.Results)),
 		logger.Int64("elapsed_time_ms", item.ElapsedTime.Milliseconds()),
 		logger.String("operation", "process_detections_entry"))
-		
+
 	// Detection window sets wait time before a detection is considered final and is flushed.
 	// This represents the duration to wait from NOW (detection creation time) before flushing,
 	// allowing overlapping analyses to accumulate confirmations for false positive filtering.

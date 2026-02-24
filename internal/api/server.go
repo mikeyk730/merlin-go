@@ -298,7 +298,7 @@ func (s *Server) setupRoutes() error {
 	if s.audioLevelChan != nil {
 		s.apiController.SetAudioLevelChan(s.audioLevelChan)
 	}
-	
+
 	// Register SPA routes (after API controller for auth middleware access)
 	s.registerSPARoutes()
 

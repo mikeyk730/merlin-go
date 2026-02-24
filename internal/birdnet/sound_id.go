@@ -55,7 +55,7 @@ func (bn *BirdNET) GenerateSoundIdSpectrogram(ctx context.Context, sample []floa
 	currentWindow := inputTensor.Float32s()
 	currentColumn := make([]byte, height)
 
-	for i := 0; i < width; i++ { //todo:mdk helper function
+	for i := 0; i < width; i++ {
 		hopStart := i * hopSize
 		for j := 0; j < windowSize; j++ {
 			currentWindow[j] = sample[hopStart+j]

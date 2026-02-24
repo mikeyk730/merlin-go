@@ -33,30 +33,6 @@ export interface Detection {
   currentSeason?: string; // Current season name
 }
 
-export interface SoundRecognition {
-  commonName: string;
-  scientificName: string;
-  confidence: number;
-  inLifeList: boolean;
-};
-
-export interface ModelPredictions {
-  predictions: SoundRecognition[];
-  datetime: string; // YYYY-MM-DD
-};
-
-export interface BirdNETConfig {
-  latitude: number;
-  longitude: number;
-};
-
-export interface SoundIdConfig {
-  birdsingingthreshold: number;
-  initialthreshold: number;
-  unlockedthreshold: number;
-  mindetectionstounlock: number;
-};
-
 export interface PaginatedDetectionResponse {
   data: Detection[];
   total: number;
@@ -156,7 +132,31 @@ export interface DailySpeciesSummary {
   previousCount?: number; // For animated counter
 }
 
-export interface SoundIdRecord {
+export interface BirdNETConfig {
+  latitude: number;
+  longitude: number;
+};
+
+export interface SoundIdConfig {
+  birdsingingthreshold: number;
+  initialthreshold: number;
+  unlockedthreshold: number;
+  mindetectionstounlock: number;
+};
+
+export interface SoundIdRecognition {
+  commonName: string;
+  scientificName: string;
+  confidence: number;
+  inLifeList: boolean;
+};
+
+export interface SoundIdPredictions {
+  predictions: SoundIdRecognition[];
+  datetime: string; // YYYY-MM-DD
+};
+
+export interface SoundIdSummary {
   common_name: string;
   scientific_name: string;
   count: number;

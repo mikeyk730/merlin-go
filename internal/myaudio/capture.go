@@ -644,7 +644,7 @@ func processAudioFrame(
 			// Non-fatal, just log
 		}
 	}
-	
+
 	// Write to buffers using source ID (use the safe bufferToUse)
 	if writeErr := WriteToAnalysisBuffer(sourceID, bufferToUse); writeErr != nil {
 		log.Warn("error writing to analysis buffer", logger.Error(writeErr))
@@ -654,7 +654,7 @@ func processAudioFrame(
 		log.Warn("error writing to capture buffer", logger.Error(writeErr))
 		// Potentially non-fatal, log and continue
 	}
-	
+
 	// Broadcast audio data using source ID (use the safe bufferToUse)
 	broadcastAudioData(sourceID, bufferToUse)
 

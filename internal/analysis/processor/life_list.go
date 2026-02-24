@@ -2,25 +2,32 @@ package processor
 
 import (
 	"encoding/csv"
-	"log"
 	"io"
 	"strings"
 	"os"
 
 	"github.com/tphakala/birdnet-go/internal/conf"
+	"github.com/tphakala/birdnet-go/internal/errors"
 )
 
 var s_life_list = map[string]bool{}
 
-func loadLifeList(settings *conf.Settings) {
+func loadLifeList(settings *conf.Settings) error {
 	path := settings.SoundId.LifeListPath
 	if path == "" {
-		log.Fatal("Life list path is not set in the configuration")
+		return errors.Newf("Life list path is not set in the configuration").
+			Component("life_list").
+			Category(errors.CategoryFileIO).
+			Build()
 	}
 	
 	file, err := os.Open(path)
 	if err != nil {
-		log.Fatal(err)
+		return errors.New(err).
+			Component("life_list").
+			Category(errors.CategoryFileIO).
+			Context("operation", "open").
+			Build()
 	}
 	defer file.Close()
 
@@ -32,11 +39,17 @@ func loadLifeList(settings *conf.Settings) {
 			break // End of file
 		}
 		if err != nil {
-			log.Fatal(err)
+			return errors.New(err).
+				Component("life_list").
+				Category(errors.CategoryFileIO).
+				Context("operation", "read").
+				Build()
 		}
 
 		s_life_list[strings.ToLower(record[4])] = true
 	}
+	
+	return nil
 }
 
 func isInLifeList(scientificName string) bool {

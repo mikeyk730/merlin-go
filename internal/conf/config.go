@@ -929,13 +929,13 @@ type BirdNETConfig struct {
 }
 
 type SoundIdConfig struct {
-	Enabled        			bool    `json:"enabled"`        		//
+	Enabled        			bool    `json:"enabled"`        		// true to enable Sound ID
 	UiModelPath 			string 	`json:"uiModelPath"` 			// path to external ui spectrogram model file
 	LifeListPath 			string 	`json:"lifelistPath"` 			// path to external life list CSV file
-	BirdSingingThreshold    float64	`json:"birdsingingthreshold"`	//
-	InitialThreshold 		float64	`json:"initialthreshold"`       //
-	UnlockedThreshold   	float64	`json:"unlockedthreshold"`      //
-	MinDetectionsToUnlock	int    	`json:"mindetectionstounlock"`  //
+	BirdSingingThreshold    float64	`json:"birdsingingthreshold"`	// minimum confidence that a bird is present. samples below this threshold will not be processed
+	InitialThreshold 		float64	`json:"initialthreshold"`       // threshold needed to display a bird for the first time
+	UnlockedThreshold   	float64	`json:"unlockedthreshold"`      // threshold needed to update a bird after it's been displayed
+	MinDetectionsToUnlock	int    	`json:"mindetectionstounlock"`  // number of consecutive detections needed to display a bird for the first time
 }
 
 type SpectrogramSettings struct {

@@ -5,15 +5,15 @@ Purpose:
 - Displays bird species
 
 Props:
-- data: SoundIdRecord[] - Array of species detection summaries
+- data: SoundIdSummary[] - Array of species detection summaries
 -->
 
 <script lang="ts">
-  import type { SoundIdRecord } from '$lib/types/detection.types';
+  import type { SoundIdSummary } from '$lib/types/detection.types';
   import BirdThumbnailPopup from './BirdThumbnailPopup.svelte';
 
   interface Props {
-    data: SoundIdRecord[];
+    data: SoundIdSummary[];
   }
 
   let {

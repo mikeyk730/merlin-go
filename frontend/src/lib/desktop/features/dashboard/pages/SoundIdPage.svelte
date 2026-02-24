@@ -24,7 +24,7 @@ State Management:
   import ReconnectingEventSource from 'reconnecting-eventsource';
   import SoundIdResultsGrid from '$lib/desktop/features/dashboard/components/SoundIdResultsGrid.svelte';
   import { t } from '$lib/i18n';
-  import type { SoundIdRecord, ModelPredictions, SoundRecognition, SoundIdConfig, BirdNETConfig } from '$lib/types/detection.types';
+  import type { SoundIdSummary, SoundIdPredictions, SoundIdRecognition, SoundIdConfig, BirdNETConfig } from '$lib/types/detection.types';
   import { getLogger } from '$lib/utils/logger';
   import { safeArrayAccess, isPlainObject } from '$lib/utils/security';
   import { api } from '$lib/utils/api';
@@ -34,7 +34,7 @@ State Management:
   // State management
   let timer = $state(0);
   let location = $state({city: '', state: ''});
-  let speciesSummary = $state<SoundIdRecord[]>([]);
+  let speciesSummary = $state<SoundIdSummary[]>([]);
   let birdSinging = $state({
         indicatorCount: 0,
         hearingCount: 0,
@@ -133,7 +133,7 @@ State Management:
   }
 
   // Helper function to process SSE detection data
-  function handleSSEDetection(detectionData: ModelPredictions) {
+  function handleSSEDetection(detectionData: SoundIdPredictions) {
     try {
       handleNewPrediction(detectionData);
     } catch (error) {
@@ -315,7 +315,7 @@ State Management:
   });
 
   // Incremental daily summary update when new detection arrives via SSE
-  function handleNewPrediction(data: ModelPredictions) {
+  function handleNewPrediction(data: SoundIdPredictions) {
     let recs = filterAndSortResults(data.predictions);
     if (recs.length == 0)
     {
@@ -376,20 +376,20 @@ State Management:
 
   let SINGING_BIRD_NAME = "bird sp."
   let unlockedSpecies = new Set<string>([SINGING_BIRD_NAME]);
-  let previousDetections = new Array<SoundRecognition>();
+  let previousDetections = new Array<SoundIdRecognition>();
 
-  function filterAndSortResults(recs: SoundRecognition[])
+  function filterAndSortResults(recs: SoundIdRecognition[])
   {
     let filteredResults = filterByThreshold(recs);
     if (!containsBirdSinging(filteredResults))
     {
-      return new Array<SoundRecognition>();
+      return new Array<SoundIdRecognition>();
     }
 
     let history = updateHistory(filteredResults);
     updateUnlockedSpecies(filteredResults, history);
 
-    let results = new Array<SoundRecognition>();
+    let results = new Array<SoundIdRecognition>();
 
     for (const rec of filteredResults)
     {
@@ -406,7 +406,7 @@ State Management:
     return results;
   }
 
-  function updateUnlockedSpecies(recs: SoundRecognition[], history: Map<string, number>)
+  function updateUnlockedSpecies(recs: SoundIdRecognition[], history: Map<string, number>)
   {
     for (const rec of recs)
     {
@@ -425,7 +425,7 @@ State Management:
     }
   }
 
-  function updateHistory(recs: SoundRecognition[])
+  function updateHistory(recs: SoundIdRecognition[])
   {
     let detectionHistory = new Map<string, number>();
 
@@ -445,7 +445,7 @@ State Management:
     return detectionHistory;
   }
 
-  function containsBirdSinging(recs: SoundRecognition[])
+  function containsBirdSinging(recs: SoundIdRecognition[])
   {
     for (const rec of recs)
     {
@@ -458,9 +458,9 @@ State Management:
     return false;
   }
 
-  function filterByThreshold(recs: SoundRecognition[])
+  function filterByThreshold(recs: SoundIdRecognition[])
   {
-    let results = new Array<SoundRecognition>();
+    let results = new Array<SoundIdRecognition>();
 
     for (const rec of recs)
     {
@@ -473,7 +473,7 @@ State Management:
     return results;
   }
 
-  function getMinConfidence(rec: SoundRecognition)
+  function getMinConfidence(rec: SoundIdRecognition)
   {
       if (rec.commonName == SINGING_BIRD_NAME) {
         return getBirdSingingThreshold();
@@ -486,14 +486,14 @@ State Management:
       return getInitialThreshold();
   }
 
-  function isUnlocked(rec: SoundRecognition)
+  function isUnlocked(rec: SoundIdRecognition)
   {
     return unlockedSpecies.has(rec.commonName);
   }
 
 
   // Incremental daily summary update when new detection arrives via SSE
-  function handleNewDetection(detection: SoundRecognition) {
+  function handleNewDetection(detection: SoundIdRecognition) {
 
     const existingIndex = speciesSummary.findIndex(s => s.common_name === detection.commonName);
 
@@ -518,7 +518,7 @@ State Management:
       );
     } else {
       // Add new species
-      const newSpecies: SoundIdRecord = {
+      const newSpecies: SoundIdSummary = {
         common_name: detection.commonName,
         scientific_name: detection.scientificName,
         inLifeList: detection.inLifeList,
